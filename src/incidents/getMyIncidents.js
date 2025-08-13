@@ -1,33 +1,68 @@
 const AWS = require("aws-sdk");
-const dynamo = new AWS.DynamoDB.DocumentClient();
 
 exports.handler = async (event) => {
   try {
-    // Get userId from query parameters or return all incidents for testing
-    const userId = event.queryStringParameters?.userId;
+    // Initialize AWS services (lazy initialization)
+    const dynamo = new AWS.DynamoDB.DocumentClient();
+    const s3 = new AWS.S3();
+
+    // Extract user ID from Cognito JWT token (same logic as createIncident)
+    let cognitoUserId = null;
     
-    let params;
-    if (userId) {
-      // Query by specific user
-      params = {
-        TableName: process.env.INCIDENT_TABLE,
-        IndexName: "userId-index", // You need to create this GSI in DynamoDB
-        KeyConditionExpression: "userId = :uid",
-        ExpressionAttributeValues: { ":uid": userId },
-      };
-    } else {
-      // Scan all incidents for testing
-      params = {
-        TableName: process.env.INCIDENT_TABLE,
+    if (event.requestContext?.authorizer?.claims) {
+      cognitoUserId = event.requestContext.authorizer.claims.sub;
+    } else if (event.headers?.Authorization || event.headers?.authorization) {
+      const authHeader = event.headers.Authorization || event.headers.authorization;
+      const token = authHeader.replace('Bearer ', '');
+      
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        cognitoUserId = payload.sub;
+      } catch (error) {
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: "Invalid JWT token" }),
+        };
+      }
+    }
+    
+    if (!cognitoUserId) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: "Unauthorized - missing user context" }),
       };
     }
-    const result = userId 
-      ? await dynamo.query(params).promise()
-      : await dynamo.scan(params).promise();
+
+    // Query incidents for authenticated user
+    const params = {
+      TableName: process.env.INCIDENT_TABLE,
+      FilterExpression: "userId = :uid",
+      ExpressionAttributeValues: { ":uid": cognitoUserId },
+    };
+    
+    const result = await dynamo.scan(params).promise();
+
+    // Generate download URLs for attachments
+    const incidentsWithDownloadUrls = result.Items.map(incident => {
+      if (incident.attachments && incident.attachments.length > 0) {
+        incident.attachments = incident.attachments.map(attachment => ({
+          ...attachment,
+          downloadUrl: s3.getSignedUrl("getObject", {
+            Bucket: process.env.ATTACHMENT_BUCKET,
+            Key: attachment.key,
+            Expires: 3600, // 1 hour expiry for download URLs
+          })
+        }));
+      }
+      return incident;
+    });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ incidents: result.Items }),
+      body: JSON.stringify({ 
+        incidents: incidentsWithDownloadUrls,
+        count: incidentsWithDownloadUrls.length
+      }),
     };
   } catch (err) {
     console.error(err);

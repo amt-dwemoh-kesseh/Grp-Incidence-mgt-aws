@@ -127,7 +127,7 @@ Resources:
             Path: /incidents
             Method: post
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -143,7 +143,7 @@ Resources:
             Path: /incidents/mine
             Method: get
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:

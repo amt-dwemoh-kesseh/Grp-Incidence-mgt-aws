@@ -1,44 +1,200 @@
 const { v4: uuidv4 } = require("uuid");
 const AWS = require("aws-sdk");
 
-// Test DynamoDB DocumentClient only
-const dynamo = new AWS.DynamoDB.DocumentClient();
-
 exports.handler = async (event) => {
-  console.log("Function started");
+  
   
   try {
-    console.log("Raw event:", JSON.stringify(event, null, 2));
-    console.log("Event body (raw):", event.body);
+    // Initialize AWS services inside the handler (lazy initialization)
+    const dynamo = new AWS.DynamoDB.DocumentClient();
+    const s3 = new AWS.S3();
+    const sns = new AWS.SNS();
+        
+    // Extract user ID from Cognito JWT token
     
-    if (!event.body) {
+    let cognitoUserId = null;
+    let userEmail = null;
+    
+    // Try to get from authorizer context (production)
+    if (event.requestContext?.authorizer?.claims) {
+      cognitoUserId = event.requestContext.authorizer.claims.sub;
+      userEmail = event.requestContext.authorizer.claims.email;
+      
+    } 
+    // Fallback: decode JWT from Authorization header (local development)
+    else if (event.headers?.Authorization || event.headers?.authorization) {
+      const authHeader = event.headers.Authorization || event.headers.authorization;
+      const token = authHeader.replace('Bearer ', '');
+      
+      try {
+        // Decode JWT payload (base64 decode the middle part)
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+       
+        cognitoUserId = payload.sub;
+        userEmail = payload.email;
+        
+      } catch (error) {
+        
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: "Invalid JWT token" }),
+        };
+      }
+    }
+    
+    if (!cognitoUserId) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({
-          error: "No body provided"
-        })
+        statusCode: 401,
+        body: JSON.stringify({ error: "Unauthorized - missing user context" }),
       };
     }
     
-    const body = JSON.parse(event.body);
-    console.log("Parsed body:", JSON.stringify(body, null, 2));
     
+
+    // Parse and validate input
+    const body = JSON.parse(event.body);
+    
+    if (!body.title || !body.description) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing required fields" }),
+      };
+    }
+
+    // Use authenticated user ID
+    const userId = cognitoUserId;
+
+    // Create incident item
+    const incidentId = uuidv4();
+    const incident = {
+      id: incidentId,
+      userId,
+      title: body.title,
+      description: body.description,
+      status: "REPORTED",
+      createdAt: new Date().toISOString(),
+    };
+    
+
+    // Save to DynamoDB
+    try {
+      await dynamo
+        .put({
+          TableName: process.env.INCIDENT_TABLE,
+          Item: incident,
+        })
+        .promise();
+    } catch (dbError) {
+      throw dbError;
+    }
+
+    // Generate S3 pre-signed URLs for attachments (support multiple files)
+    let uploadUrls = [];
+    let attachments = [];
+    
+    if (body.attachmentFilenames && Array.isArray(body.attachmentFilenames)) {
+      // Multiple files
+      for (const filename of body.attachmentFilenames) {
+        const attachmentId = uuidv4();
+        const key = `incidents/${incidentId}/${attachmentId}_${filename}`;
+        
+        const uploadUrl = s3.getSignedUrl("putObject", {
+          Bucket: process.env.ATTACHMENT_BUCKET,
+          Key: key,
+          Expires: 300,
+        });
+        
+        uploadUrls.push({
+          filename,
+          attachmentId,
+          uploadUrl,
+          key
+        });
+        
+        attachments.push({
+          id: attachmentId,
+          filename,
+          key,
+          uploadedAt: null, // Will be updated when file is actually uploaded
+          contentType: null, // Will be updated when file is uploaded
+          size: null
+        });
+      }
+    } else if (body.attachmentFilename) {
+      // Single file (backward compatibility)
+      const attachmentId = uuidv4();
+      const key = `incidents/${incidentId}/${attachmentId}_${body.attachmentFilename}`;
+      
+      const uploadUrl = s3.getSignedUrl("putObject", {
+        Bucket: process.env.ATTACHMENT_BUCKET,
+        Key: key,
+        Expires: 300,
+      });
+      
+      uploadUrls.push({
+        filename: body.attachmentFilename,
+        attachmentId,
+        uploadUrl,
+        key
+      });
+      
+      attachments.push({
+        id: attachmentId,
+        filename: body.attachmentFilename,
+        key,
+        uploadedAt: null,
+        contentType: null,
+        size: null
+      });
+    }
+    
+    // Add attachments metadata to incident
+    if (attachments.length > 0) {
+      incident.attachments = attachments;
+    }
+
+    // Publish to SNS
+    try {
+      await sns
+        .publish({
+          TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
+          Message: JSON.stringify({ incidentId, userId }),
+        })
+        .promise();
+    } catch (snsError) {
+      console.error("SNS error:", snsError);
+    }
+
+    // Return response
     return {
-      statusCode: 200,
+      statusCode: 201,
       body: JSON.stringify({
-        message: "Request received and logged",
-        receivedData: body
-      })
+        message: "Incident created",
+        incidentId,
+        uploadUrls,
+        attachmentCount: attachments.length
+      }),
     };
   } catch (error) {
-    console.error("Error:", error);
-    
+    console.error("Error creating incident:", error);
+
+    let statusCode = 500;
+    let errorMessage = error.message || "Something went wrong";
+
+    if (error instanceof SyntaxError && error.message.includes("JSON")) {
+      statusCode = 400;
+      errorMessage = "Invalid JSON in request body.";
+    } else if (error.message.includes("TableName") || error.message.includes("Bucket") || error.message.includes("TopicArn")) {
+      // This is a generic check, more specific checks could be added if needed
+      errorMessage = `Configuration error: ${error.message}`;
+    }
+
     return {
-      statusCode: 500,
+      statusCode: statusCode,
       body: JSON.stringify({
-        error: "Something went wrong",
-        details: error.message
-      })
+        error: errorMessage,
+        details: error.message, 
+      }),
     };
   }
 };
