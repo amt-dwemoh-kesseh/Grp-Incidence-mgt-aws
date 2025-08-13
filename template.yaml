@@ -96,6 +96,10 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: prod
+      BinaryMediaTypes:
+        - "multipart/form-data"
+        - "image/*"
+        - "application/octet-stream"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:

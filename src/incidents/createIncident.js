@@ -1,8 +1,9 @@
 const { v4: uuidv4 } = require("uuid");
 const AWS = require("aws-sdk");
+const path = require("path");
 
 exports.handler = async (event) => {
-  
+  console.log("Function started");
   
   try {
     // Initialize AWS services inside the handler (lazy initialization)
@@ -88,69 +89,14 @@ exports.handler = async (event) => {
       throw dbError;
     }
 
-    // Generate S3 pre-signed URLs for attachments (support multiple files)
-    let uploadUrls = [];
-    let attachments = [];
-    
-    if (body.attachmentFilenames && Array.isArray(body.attachmentFilenames)) {
-      // Multiple files
-      for (const filename of body.attachmentFilenames) {
-        const attachmentId = uuidv4();
-        const key = `incidents/${incidentId}/${attachmentId}_${filename}`;
-        
-        const uploadUrl = s3.getSignedUrl("putObject", {
-          Bucket: process.env.ATTACHMENT_BUCKET,
-          Key: key,
-          Expires: 300,
-        });
-        
-        uploadUrls.push({
-          filename,
-          attachmentId,
-          uploadUrl,
-          key
-        });
-        
-        attachments.push({
-          id: attachmentId,
-          filename,
-          key,
-          uploadedAt: null, // Will be updated when file is actually uploaded
-          contentType: null, // Will be updated when file is uploaded
-          size: null
-        });
-      }
-    } else if (body.attachmentFilename) {
-      // Single file (backward compatibility)
-      const attachmentId = uuidv4();
-      const key = `incidents/${incidentId}/${attachmentId}_${body.attachmentFilename}`;
-      
-      const uploadUrl = s3.getSignedUrl("putObject", {
+    // Generate S3 pre-signed URL for attachment (optional)
+    let uploadUrl;
+    if (body.attachmentFilename) {
+      uploadUrl = s3.getSignedUrl("putObject", {
         Bucket: process.env.ATTACHMENT_BUCKET,
-        Key: key,
+        Key: `incidents/${incidentId}/${body.attachmentFilename}`,
         Expires: 300,
       });
-      
-      uploadUrls.push({
-        filename: body.attachmentFilename,
-        attachmentId,
-        uploadUrl,
-        key
-      });
-      
-      attachments.push({
-        id: attachmentId,
-        filename: body.attachmentFilename,
-        key,
-        uploadedAt: null,
-        contentType: null,
-        size: null
-      });
-    }
-    
-    // Add attachments metadata to incident
-    if (attachments.length > 0) {
-      incident.attachments = attachments;
     }
 
     // Publish to SNS
@@ -163,6 +109,7 @@ exports.handler = async (event) => {
         .promise();
     } catch (snsError) {
       console.error("SNS error:", snsError);
+
     }
 
     // Return response
@@ -171,8 +118,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: "Incident created",
         incidentId,
-        uploadUrls,
-        attachmentCount: attachments.length
+        uploadUrl,
       }),
     };
   } catch (error) {
@@ -193,7 +139,7 @@ exports.handler = async (event) => {
       statusCode: statusCode,
       body: JSON.stringify({
         error: errorMessage,
-        details: error.message, 
+        details: error.message, // Include error message for debugging
       }),
     };
   }
