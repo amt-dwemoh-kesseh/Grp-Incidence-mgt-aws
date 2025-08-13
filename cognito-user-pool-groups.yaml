@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  UserPoolId:
+    Type: String
+  Groups:
+    Type: String
+Resources:
+  CitizenGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: citizen
+      UserPoolId: !Ref UserPoolId
+  CityAuthGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: cityAuth
+      UserPoolId: !Ref UserPoolId
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref UserPoolId

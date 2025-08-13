@@ -1,0 +1,32 @@
+version = 0.1
+
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "incidence-dev"
+s3_bucket = "sam-artifacts-dev-kesse"
+s3_prefix = "incidence"
+region = "eu-central-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+
+[dev]
+[dev.deploy]
+[dev.deploy.parameters]
+stack_name = "incidence-dev"
+s3_bucket = "sam-artifacts-dev"
+s3_prefix = "incidence"
+region = "eu-central-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+
+[prod]
+[prod.deploy]
+[prod.deploy.parameters]
+stack_name = "incidence-prod"
+s3_bucket = "sam-artifacts-prod"
+s3_prefix = "incidence"
+region = "eu-central-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+

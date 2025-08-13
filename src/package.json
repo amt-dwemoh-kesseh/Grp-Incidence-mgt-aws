@@ -1,0 +1,16 @@
+{
+  "name": "incidence-backend-src",
+  "version": "1.0.0",
+  "description": "AWS Lambda functions for the Incidence backend (local development)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"No tests specified\" && exit 0",
+    "start-local": "sam local start-api --env-vars ./local-env.json",
+    "start-dev": "sam local start-api --warm-containers EAGER --env-vars ./local-env.json --watch"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1485.0",
+    "uuid": "^9.0.0",
+    "dotenv": "^16.3.1"
+  }
+}
