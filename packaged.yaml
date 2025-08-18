@@ -6,6 +6,7 @@ Globals:
     Runtime: nodejs18.x
     Timeout: 10
     MemorySize: 256
+    CodeUri: ./src
     Environment:
       Variables:
         INCIDENT_TABLE:
@@ -48,7 +49,7 @@ Resources:
   UserPoolGroups:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://sam-artifacts-dev-kesse.s3.eu-central-1.amazonaws.com/cognito-user-pool-groups.yaml
+      TemplateURL: https://sam-artifacts-dev-kesse.s3.eu-west-1.amazonaws.com/cognito-user-pool-groups.yaml
       Parameters:
         UserPoolId:
           Ref: UserPool
@@ -109,6 +110,10 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: prod
+      BinaryMediaTypes:
+      - multipart/form-data
+      - image/*
+      - application/octet-stream
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
@@ -122,7 +127,7 @@ Resources:
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/incidents/createIncident.handler
+      Handler: incidents/createIncident.handler
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -151,13 +156,13 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: CreateIncidentFunction
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/incidents/getMyIncidents.handler
+      Handler: incidents/getMyIncidents.handler
       Policies:
       - DynamoDBReadPolicy:
           TableName:
@@ -172,13 +177,13 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: GetMyIncidentsFunction
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/incidents/listIncidents.handler
+      Handler: incidents/listIncidents.handler
       Policies:
       - DynamoDBReadPolicy:
           TableName:
@@ -192,14 +197,14 @@ Resources:
             Path: /incidents
             Method: get
             Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+              Authorizer: NONE
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: ListIncidentsFunction
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/incidents/updateIncidentStatus.handler
+      Handler: incidents/updateIncidentStatus.handler
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -216,14 +221,14 @@ Resources:
             Path: /incidents/{id}/status
             Method: put
             Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+              Authorizer: NONE
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: UpdateIncidentStatusFunction
   SubmitFeedbackFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/feedback/submitFeedback.handler
+      Handler: feedback/submitFeedback.handler
       Policies:
       - DynamoDBCrudPolicy:
           TableName:
@@ -237,30 +242,30 @@ Resources:
             Path: /feedback
             Method: post
             Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+              Authorizer: NONE
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: SubmitFeedbackFunction
   NotifyOfficialFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/notifications/notifyOfficial.handler
+      Handler: notifications/notifyOfficial.handler
       Policies:
       - SNSPublishMessagePolicy:
           TopicName:
             Ref: IncidentReportedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: NotifyOfficialFunction
   NotifyReporterFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: src/notifications/notifyReporter.handler
+      Handler: notifications/notifyReporter.handler
       Policies:
       - SNSPublishMessagePolicy:
           TopicName:
             Ref: StatusUpdatedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/9eb74a4e2736a5cc119a2339946c246a
+      CodeUri: s3://sam-artifacts-dev-kesse/10174ac6a577750161dce8925d3c730d
     Metadata:
       SamResourceId: NotifyReporterFunction
 Outputs:

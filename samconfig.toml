@@ -6,7 +6,7 @@ version = 0.1
 stack_name = "incidence-dev"
 s3_bucket = "sam-artifacts-dev-kesse"
 s3_prefix = "incidence"
-region = "eu-central-1"
+region = "eu-west-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 
@@ -16,7 +16,7 @@ capabilities = "CAPABILITY_IAM"
 stack_name = "incidence-dev"
 s3_bucket = "sam-artifacts-dev"
 s3_prefix = "incidence"
-region = "eu-central-1"
+region = "eu-west-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 
@@ -26,7 +26,7 @@ capabilities = "CAPABILITY_IAM"
 stack_name = "incidence-prod"
 s3_bucket = "sam-artifacts-prod"
 s3_prefix = "incidence"
-region = "eu-central-1"
+region = "eu-west-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_IAM"
 
