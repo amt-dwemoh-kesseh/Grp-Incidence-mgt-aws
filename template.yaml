@@ -41,7 +41,7 @@ Resources:
   UserPoolGroups:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: https://s3.amazonaws.com/aws-cfn-templates/cloudformation-templates/cognito-user-pool-groups.yaml
+      TemplateURL: https://sam-artifacts-dev-kesse.s3.eu-west-1.amazonaws.com/cognito-user-pool-groups.yaml
       Parameters:
         UserPoolId: !Ref UserPool
         Groups: "citizen,cityAuth,admin"

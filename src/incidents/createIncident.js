@@ -13,42 +13,42 @@ exports.handler = async (event) => {
         
     // Extract user ID from Cognito JWT token
     
-    let cognitoUserId = null;
-    let userEmail = null;
+    let cognitoUserId = "98999993-UUID-4d3c-8b2f-123456789012"; // Default for local testing
+    let userEmail = "3samkus@gmail.com";
     
     // Try to get from authorizer context (production)
-    if (event.requestContext?.authorizer?.claims) {
-      cognitoUserId = event.requestContext.authorizer.claims.sub;
-      userEmail = event.requestContext.authorizer.claims.email;
+    // if (event.requestContext?.authorizer?.claims) {
+    //   cognitoUserId = event.requestContext.authorizer.claims.sub;
+    //   userEmail = event.requestContext.authorizer.claims.email;
       
-    } 
-    // Fallback: decode JWT from Authorization header (local development)
-    else if (event.headers?.Authorization || event.headers?.authorization) {
-      const authHeader = event.headers.Authorization || event.headers.authorization;
-      const token = authHeader.replace('Bearer ', '');
+    // } 
+    // // Fallback: decode JWT from Authorization header (local development)
+    // else if (event.headers?.Authorization || event.headers?.authorization) {
+    //   const authHeader = event.headers.Authorization || event.headers.authorization;
+    //   const token = authHeader.replace('Bearer ', '');
       
-      try {
-        // Decode JWT payload (base64 decode the middle part)
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    //   try {
+    //     // Decode JWT payload (base64 decode the middle part)
+    //     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
        
-        cognitoUserId = payload.sub;
-        userEmail = payload.email;
+    //     cognitoUserId = payload.sub;
+    //     userEmail = payload.email;
         
-      } catch (error) {
+    //   } catch (error) {
         
-        return {
-          statusCode: 401,
-          body: JSON.stringify({ error: "Invalid JWT token" }),
-        };
-      }
-    }
+    //     return {
+    //       statusCode: 401,
+    //       body: JSON.stringify({ error: "Invalid JWT token" }),
+    //     };
+    //   }
+    // }
     
-    if (!cognitoUserId) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: "Unauthorized - missing user context" }),
-      };
-    }
+    // if (!cognitoUserId) {
+    //   return {
+    //     statusCode: 401,
+    //     body: JSON.stringify({ error: "Unauthorized - missing user context" }),
+    //   };
+    // }
     
     
 
