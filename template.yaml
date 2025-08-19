@@ -25,7 +25,7 @@ Resources:
                 - amplify.eu-central-1.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   AmplifyApp:
     Type: AWS::Amplify::App
