@@ -23,7 +23,6 @@ Resources:
               Service: 
                 - amplify.amazonaws.com
                 - amplify.eu-central-1.amazonaws.com
-                - amplify.eu-east-1.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
