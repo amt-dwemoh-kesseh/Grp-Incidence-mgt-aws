@@ -2,235 +2,102 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: Monitoring & Reporting Platform Backend (MSc Real Estate Capstone)
 
-Globals:
-  Function:
-    Runtime: nodejs18.x
-    Timeout: 10
-    MemorySize: 256
-    CodeUri: ./src
-    Environment:
-      Variables:
-        INCIDENT_TABLE: !Ref IncidentTable
-        FEEDBACK_TABLE: !Ref FeedbackTable
-        ATTACHMENT_BUCKET: !Ref IncidentAttachmentBucket
-        INCIDENT_REPORTED_TOPIC: !Ref IncidentReportedTopic
-        STATUS_UPDATED_TOPIC: !Ref StatusUpdatedTopic
+Parameters:
+  AppName: { Type: String, Default: Taskify }
+  ProjectTag: { Type: String, Default: "incident-app" }
+  GitRepoUrl:
+    { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
+  GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
 
 Resources:
-  # Cognito User Pool
-  UserPool:
-    Type: AWS::Cognito::UserPool
+  AmplifyRole:
+    Type: AWS::IAM::Role
     Properties:
-      UserPoolName: MonitoringUserPool
-      AutoVerifiedAttributes: [email]
-      Policies:
-        PasswordPolicy:
-          MinimumLength: 8
-      Schema:
-        - Name: email
-          Required: true
-          Mutable: true
-      UsernameAttributes:
-        - email
-  UserPoolClient:
-    Type: AWS::Cognito::UserPoolClient
-    Properties:
-      ClientName: MonitoringUserPoolClient
-      UserPoolId: !Ref UserPool
-      GenerateSecret: false
-  UserPoolGroups:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      TemplateURL: https://s3.amazonaws.com/aws-cfn-templates/cloudformation-templates/cognito-user-pool-groups.yaml
-      Parameters:
-        UserPoolId: !Ref UserPool
-        Groups: "citizen,cityAuth,admin"
+      RoleName: AmplifyServiceRole
+      Description: IAM role assumed by AWS Amplify to build and deploy apps
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: amplify.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
 
-  # DynamoDB Tables
-  IncidentTable:
-    Type: AWS::DynamoDB::Table
+  AmplifyApp:
+    Type: AWS::Amplify::App
     Properties:
-      TableName: IncidentTable
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
-  FeedbackTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: FeedbackTable
-      AttributeDefinitions:
-        - AttributeName: id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: id
-          KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
+      Name: IncidentReportingAmplifyApp
+      Description: Incident Reporting App
+      Repository: !Ref GitRepoUrl
+      IAMServiceRole: !GetAtt AmplifyRole.Arn
+      AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecret}:SecretString:GithubAccessToken_}}"
+      BuildSpec: |
+        version: 1
+        backend:
+          phases:
+            build:
+              commands:
+                - yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
+                - echo $AWS_BRANCH
+                - |
+                  case "${AWS_BRANCH}" in
+                    main)
+                        echo "Deploying main branch"
+                        npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+                        ;;
+                    dev)
+                        echo "Deploying dev branch"
+                        npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+                        ;;
+                    feature*)
+                        echo "Deploying feature branch"
+                        npx ampx generate outputs --branch previews --app-id $AWS_APP_ID
+                        ;;
+                    *)
+                        echo "No deployment for branch ${AWS_BRANCH}"
+                        ;;
+                  esac
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - npx ng version
+            build:
+              commands:
+                - npx ng build --configuration=production
+          artifacts:
+            baseDirectory: dist/cmrp-frontend/browser
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - .npm/**/*
+              - node_modules/**/*
 
-  # S3 Bucket
-  IncidentAttachmentBucket:
-    Type: AWS::S3::Bucket
+  MainBranch:
+    Type: AWS::Amplify::Branch
+    DependsOn: AmplifyApp
     Properties:
-      BucketName: !Sub "incident-attachments-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: main
+      EnableAutoBuild: true
+      Stage: PRODUCTION
 
-  # SNS Topics
-  IncidentReportedTopic:
-    Type: AWS::SNS::Topic
+  DevBranch:
+    Type: AWS::Amplify::Branch
+    DependsOn: AmplifyApp
     Properties:
-      TopicName: incident-reported
-  StatusUpdatedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: status-updated
-
-  # API Gateway
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: prod
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn: !GetAtt UserPool.Arn
-
-  # Lambda Functions
-  CreateIncidentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: incidents/createIncident.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref IncidentTable
-        - S3WritePolicy:
-            BucketName: !Ref IncidentAttachmentBucket
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref IncidentReportedTopic
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:ListUsers
-              Resource: !GetAtt UserPool.Arn
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /incidents
-            Method: post
-            Auth:
-              Authorizer: NONE
-  GetMyIncidentsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: incidents/getMyIncidents.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref IncidentTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /incidents/mine
-            Method: get
-            Auth:
-              Authorizer: NONE
-  ListIncidentsFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: incidents/listIncidents.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref IncidentTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /incidents
-            Method: get
-            Auth:
-              Authorizer: NONE
-  UpdateIncidentStatusFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: incidents/updateIncidentStatus.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref IncidentTable
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref StatusUpdatedTopic
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /incidents/{id}/status
-            Method: put
-            Auth:
-              Authorizer: NONE
-  SubmitFeedbackFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: feedback/submitFeedback.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref FeedbackTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId: !Ref ApiGateway
-            Path: /feedback
-            Method: post
-            Auth:
-              Authorizer: NONE
-  NotifyOfficialFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: notifications/notifyOfficial.handler
-      Policies:
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref IncidentReportedTopic
-  NotifyReporterFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: notifications/notifyReporter.handler
-      Policies:
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref StatusUpdatedTopic
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: dev
+      EnableAutoBuild: true
+      Stage: DEVELOPMENT
 
 Outputs:
-  ApiUrl:
-    Description: "API Gateway endpoint URL"
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/"
-  UserPoolId:
-    Description: "Cognito User Pool ID"
-    Value: !Ref UserPool
-  UserPoolClientId:
-    Description: "Cognito User Pool Client ID"
-    Value: !Ref UserPoolClient
-  IncidentTableName:
-    Description: "Incident DynamoDB Table Name"
-    Value: !Ref IncidentTable
-  FeedbackTableName:
-    Description: "Feedback DynamoDB Table Name"
-    Value: !Ref FeedbackTable
-  AttachmentBucketName:
-    Description: "Incident Attachment S3 Bucket Name"
-    Value: !Ref IncidentAttachmentBucket
-  IncidentReportedTopicArn:
-    Description: "Incident Reported SNS Topic ARN"
-    Value: !Ref IncidentReportedTopic
-  StatusUpdatedTopicArn:
-    Description: "Status Updated SNS Topic ARN"
-    Value: !Ref StatusUpdatedTopic
+  AmplifyAppId:
+    Description: The ID of the deployed Amplify application
+    Value: !GetAtt AmplifyApp.AppId
+  AmplifyAppName:
+    Description: The name of the deployed Amplify application
+    Value: !GetAtt AmplifyApp.AppName
