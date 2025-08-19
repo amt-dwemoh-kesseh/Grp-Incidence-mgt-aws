@@ -8,8 +8,9 @@ exports.handler = async (event) => {
   try {
     // Initialize AWS services inside the handler (lazy initialization)
     const dynamo = new AWS.DynamoDB.DocumentClient();
-    const s3 = new AWS.S3();
+    // const s3 = new AWS.S3();
     const sns = new AWS.SNS();
+    
         
     // Extract user ID from Cognito JWT token
     
@@ -54,6 +55,7 @@ exports.handler = async (event) => {
 
     // Parse and validate input
     const body = JSON.parse(event.body);
+    console.log("Parsed body:", body);
     
     if (!body.title || !body.description) {
       return {
@@ -65,6 +67,34 @@ exports.handler = async (event) => {
     // Use authenticated user ID
     const userId = cognitoUserId;
 
+
+    let imageUrls = [];
+    
+    if (body.imageUrls && Array.isArray(body.imageUrls) && body.imageUrls.length > 0) {
+      // Validate image URLs
+      for (const imageUrl of body.imageUrls) {
+        if (!imageUrl || typeof imageUrl !== 'string') {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ error: "Invalid image URL provided" }),
+          };
+        }
+        
+        // Basic URL validation
+        try {
+          console.log("Validating image URL:", imageUrl);
+          new URL(imageUrl);
+          imageUrls.push(imageUrl);
+          console.log("Image URL is valid:", imageUrl);
+        } catch (error) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ error: "Invalid image URL format" }),
+          };
+        }
+      }
+    }
+
     // Create incident item
     const incidentId = uuidv4();
     const incident = {
@@ -74,6 +104,7 @@ exports.handler = async (event) => {
       description: body.description,
       status: "REPORTED",
       createdAt: new Date().toISOString(),
+      imageUrls,
     };
     
 
@@ -90,14 +121,14 @@ exports.handler = async (event) => {
     }
 
     // Generate S3 pre-signed URL for attachment (optional)
-    let uploadUrl;
-    if (body.attachmentFilename) {
-      uploadUrl = s3.getSignedUrl("putObject", {
-        Bucket: process.env.ATTACHMENT_BUCKET,
-        Key: `incidents/${incidentId}/${body.attachmentFilename}`,
-        Expires: 300,
-      });
-    }
+    // let uploadUrl;
+    // if (body.attachmentFilename) {
+    //   uploadUrl = s3.getSignedUrl("putObject", {
+    //     Bucket: process.env.ATTACHMENT_BUCKET,
+    //     Key: `incidents/${incidentId}/${body.attachmentFilename}`,
+    //     Expires: 300,
+    //   });
+    // }
 
     // Publish to SNS
     try {
@@ -118,7 +149,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: "Incident created",
         incidentId,
-        uploadUrl,
+        imageUrls,
       }),
     };
   } catch (error) {
