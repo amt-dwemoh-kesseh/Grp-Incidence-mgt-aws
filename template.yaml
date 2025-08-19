@@ -20,7 +20,9 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: amplify.amazonaws.com
+              Service: 
+                - amplify.amazonaws.com
+                - amplify.eu-west-1.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
