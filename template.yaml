@@ -5,7 +5,7 @@ Resources:
   TestS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "dispose-later-sam-pipeline-test-bucket-${AWS::AccountId}-${AWS::Region}"
+      BucketName: !Sub "dispose-later-bucket-${AWS::AccountId}-${AWS::Region}"
 
 Outputs:
   BucketName:
