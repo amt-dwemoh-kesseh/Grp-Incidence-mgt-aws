@@ -142,7 +142,7 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: GetUploadUrlsFunction
   CreateIncidentFunction:
@@ -174,7 +174,7 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: CreateIncidentFunction
   GetMyIncidentsFunction:
@@ -195,7 +195,7 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: GetMyIncidentsFunction
   ListIncidentsFunction:
@@ -216,7 +216,7 @@ Resources:
             Method: get
             Auth:
               Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: ListIncidentsFunction
   UpdateIncidentStatusFunction:
@@ -240,7 +240,7 @@ Resources:
             Method: put
             Auth:
               Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: UpdateIncidentStatusFunction
   SubmitFeedbackFunction:
@@ -261,7 +261,7 @@ Resources:
             Method: post
             Auth:
               Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: SubmitFeedbackFunction
   NotifyOfficialFunction:
@@ -272,7 +272,7 @@ Resources:
       - SNSPublishMessagePolicy:
           TopicName:
             Ref: IncidentReportedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: NotifyOfficialFunction
   NotifyReporterFunction:
@@ -283,7 +283,7 @@ Resources:
       - SNSPublishMessagePolicy:
           TopicName:
             Ref: StatusUpdatedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/bc250b26aac8a140ecc6951101c40e94
+      CodeUri: s3://sam-artifacts-dev-kesse/5b77de3ff3014f500bc86bd32f91a75f
     Metadata:
       SamResourceId: NotifyReporterFunction
 Outputs:
