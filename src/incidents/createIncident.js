@@ -102,7 +102,9 @@ exports.handler = async (event) => {
       userId,
       title: body.title,
       description: body.description,
-      status: "REPORTED",
+      status: "pending",
+      severity: body.severity,
+      location: body.location,
       createdAt: new Date().toISOString(),
       imageUrls,
     };
