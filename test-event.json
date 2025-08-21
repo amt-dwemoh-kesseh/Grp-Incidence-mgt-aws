@@ -1,0 +1,7 @@
+{
+  "httpMethod": "GET",
+  "path": "/incidents",
+  "headers": {},
+  "queryStringParameters": null,
+  "body": null
+}

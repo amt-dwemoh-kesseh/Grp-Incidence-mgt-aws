@@ -7,3 +7,5 @@ test-lambda.js
 .claude
 .aws-sam
 .github
+package-lock.json
+package.json

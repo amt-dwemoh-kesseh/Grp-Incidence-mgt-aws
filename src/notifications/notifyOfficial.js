@@ -1,4 +1,4 @@
-// Lambda handler for notifying city officials (SNS)
+  // Lambda handler for notifying city officials (SNS)
 exports.handler = async (event) => {
   // TODO: Parse event for notification details
   // TODO: Publish notification to SNS (incident-reported)
