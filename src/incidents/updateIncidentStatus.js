@@ -1,52 +1,73 @@
 const AWS = require("aws-sdk");
-const dynamo = new AWS.DynamoDB.DocumentClient();
-const sns = new AWS.SNS();
 
 exports.handler = async (event) => {
+  const stepfunctions = new AWS.StepFunctions();
+  
   try {
-    // Skip authorization check for testing
+    // Extract user info for authorization
+    let updatedBy = "system";
+    let userGroups = [];
+    
+    if (event.requestContext?.authorizer?.claims) {
+      updatedBy = event.requestContext.authorizer.claims.sub;
+      userGroups = event.requestContext.authorizer.claims['cognito:groups'] || [];
+    }
 
-    // Parse path and body
-    const incidentId = event.pathParameters.id;
-    const body = JSON.parse(event.body);
-    if (!body.status) {
+    // Check permissions - only cityAuth and admin can update status
+    const canUpdate = userGroups.includes('cityAuth') || userGroups.includes('admin');
+    if (!canUpdate) {
       return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing status" }),
+        statusCode: 403,
+        body: JSON.stringify({ error: "Insufficient permissions to update incident status" }),
       };
     }
 
-    // Update incident status in DynamoDB
-    const params = {
-      TableName: process.env.INCIDENT_TABLE,
-      Key: { id: incidentId },
-      UpdateExpression: "set #s = :s",
-      ExpressionAttributeNames: { "#s": "status" },
-      ExpressionAttributeValues: { ":s": body.status },
-      ReturnValues: "ALL_NEW",
-    };
-    const result = await dynamo.update(params).promise();
+    const incidentId = event.pathParameters.id;
+    const body = JSON.parse(event.body);
+    
+    const validStatuses = ['REPORTED', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'];
+    
+    if (!body.status || !validStatuses.includes(body.status)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: "Invalid status", 
+          validStatuses 
+        }),
+      };
+    }
 
-    // Publish to SNS
-    await sns
-      .publish({
-        TopicArn: process.env.STATUS_UPDATED_TOPIC,
-        Message: JSON.stringify({ incidentId, status: body.status }),
+    // Start Step Functions workflow for status update and notifications
+    const params = {
+      stateMachineArn: process.env.STATUS_WORKFLOW_ARN,
+      input: JSON.stringify({
+        incidentId,
+        newStatus: body.status,
+        updatedBy,
+        timestamp: new Date().toISOString(),
+        comments: body.comments || null
       })
-      .promise();
+    };
+
+    const result = await stepfunctions.startExecution(params).promise();
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Incident status updated",
-        incident: result.Attributes,
+        message: "Status update workflow started",
+        executionArn: result.executionArn,
+        incidentId,
+        newStatus: body.status
       }),
     };
   } catch (err) {
-    console.error(err);
+    console.error("Error updating incident status:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Something went wrong!" }),
+      body: JSON.stringify({ 
+        error: "Something went wrong!",
+        details: err.message 
+      }),
     };
   }
 };

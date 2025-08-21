@@ -13,8 +13,11 @@ Globals:
         INCIDENT_TABLE: !Ref IncidentTable
         FEEDBACK_TABLE: !Ref FeedbackTable
         ATTACHMENT_BUCKET: !Ref IncidentAttachmentBucket
+        DASHBOARD_BUCKET: !Ref DashboardDataBucket
         INCIDENT_REPORTED_TOPIC: !Ref IncidentReportedTopic
         STATUS_UPDATED_TOPIC: !Ref StatusUpdatedTopic
+        STATUS_WORKFLOW_ARN: !Ref IncidentStatusWorkflow
+        FROM_EMAIL: noreply@monitoring-platform.com
 
 Resources:
   # Cognito User Pool
@@ -70,7 +73,7 @@ Resources:
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
 
-  # S3 Bucket
+  # S3 Buckets
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -80,6 +83,24 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+        
+  DashboardDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "dashboard-data-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      BucketPolicy:
+        PolicyDocument:
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: quicksight.amazonaws.com
+              Action: s3:GetObject
+              Resource: !Sub "arn:aws:s3:::dashboard-data-${AWS::AccountId}/*"
 
   # SNS Topics
   IncidentReportedTopic:
@@ -90,6 +111,150 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: status-updated
+
+  # Step Functions State Machine
+  IncidentStatusWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: IncidentStatusWorkflow
+      DefinitionString: !Sub |
+        {
+          "Comment": "Incident Status Update Workflow with Notifications",
+          "StartAt": "UpdateIncidentStatus",
+          "States": {
+            "UpdateIncidentStatus": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:updateItem",
+              "Parameters": {
+                "TableName": "${IncidentTable}",
+                "Key": {
+                  "id": {
+                    "S.$": "$.incidentId"
+                  }
+                },
+                "UpdateExpression": "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy",
+                "ExpressionAttributeNames": {
+                  "#status": "status"
+                },
+                "ExpressionAttributeValues": {
+                  ":status": {
+                    "S.$": "$.newStatus"
+                  },
+                  ":updatedAt": {
+                    "S.$": "$.timestamp"
+                  },
+                  ":updatedBy": {
+                    "S.$": "$.updatedBy"
+                  }
+                }
+              },
+              "Next": "GetIncidentDetails"
+            },
+            "GetIncidentDetails": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:getItem",
+              "Parameters": {
+                "TableName": "${IncidentTable}",
+                "Key": {
+                  "id": {
+                    "S.$": "$.incidentId"
+                  }
+                }
+              },
+              "Next": "NotifyReporter",
+              "ResultPath": "$.incidentDetails"
+            },
+            "NotifyReporter": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${StatusUpdatedTopic}",
+                "Message.$": "States.Format('Your incident {} status has been updated to: {}', $.incidentId, $.newStatus)",
+                "Subject.$": "States.Format('Incident Status Updated: {}', $.newStatus)",
+                "MessageAttributes": {
+                  "incidentId": {
+                    "DataType": "String",
+                    "StringValue.$": "$.incidentId"
+                  },
+                  "newStatus": {
+                    "DataType": "String",
+                    "StringValue.$": "$.newStatus"
+                  },
+                  "userEmail": {
+                    "DataType": "String",
+                    "StringValue.$": "$.incidentDetails.Item.userEmail.S"
+                  }
+                }
+              },
+              "Next": "CheckIfClosed"
+            },
+            "CheckIfClosed": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.newStatus",
+                  "StringEquals": "CLOSED",
+                  "Next": "SendClosureNotification"
+                }
+              ],
+              "Default": "Success"
+            },
+            "SendClosureNotification": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${StatusUpdatedTopic}",
+                "Message": "Your incident has been resolved and closed. Thank you for your report.",
+                "Subject": "Incident Closed - Resolution Complete",
+                "MessageAttributes": {
+                  "incidentId": {
+                    "DataType": "String",
+                    "StringValue.$": "$.incidentId"
+                  },
+                  "userEmail": {
+                    "DataType": "String",
+                    "StringValue.$": "$.incidentDetails.Item.userEmail.S"
+                  },
+                  "notificationType": {
+                    "DataType": "String",
+                    "StringValue": "CLOSURE"
+                  }
+                }
+              },
+              "Next": "Success"
+            },
+            "Success": {
+              "Type": "Succeed"
+            }
+          }
+        }
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+
+  # IAM Role for Step Functions
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                  - dynamodb:GetItem
+                Resource: !GetAtt IncidentTable.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref StatusUpdatedTopic
 
   # API Gateway
   ApiGateway:
@@ -107,6 +272,22 @@ Resources:
             UserPoolArn: !GetAtt UserPool.Arn
 
   # Lambda Functions
+  GetUploadUrlsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: incidents/getUploadUrls.handler
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref IncidentAttachmentBucket
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /upload-urls
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -114,8 +295,6 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
-        - S3WritePolicy:
-            BucketName: !Ref IncidentAttachmentBucket
         - SNSPublishMessagePolicy:
             TopicName: !Ref IncidentReportedTopic
         - Statement:
@@ -139,6 +318,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
+        - S3ReadPolicy:
+            BucketName: !Ref IncidentAttachmentBucket
       Events:
         Api:
           Type: Api
@@ -155,6 +336,8 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
+        - S3ReadPolicy:
+            BucketName: !Ref IncidentAttachmentBucket
       Events:
         Api:
           Type: Api
@@ -163,7 +346,7 @@ Resources:
             Path: /incidents
             Method: get
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -173,6 +356,11 @@ Resources:
             TableName: !Ref IncidentTable
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
+        - Statement:
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Ref IncidentStatusWorkflow
       Events:
         Api:
           Type: Api
@@ -181,7 +369,7 @@ Resources:
             Path: /incidents/{id}/status
             Method: put
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
   SubmitFeedbackFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -212,6 +400,40 @@ Resources:
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
+            
+  EmailNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: notifications/emailNotificationHandler.handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        StatusUpdatedSNS:
+          Type: SNS
+          Properties:
+            Topic: !Ref StatusUpdatedTopic
+            
+  ExportDashboardDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: dashboard/exportDashboardData.handler
+      Timeout: 60
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
+        - S3WritePolicy:
+            BucketName: !Ref DashboardDataBucket
+      Events:
+        ScheduledExport:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 hour)
+            Enabled: true
 
 Outputs:
   ApiUrl:
@@ -238,3 +460,6 @@ Outputs:
   StatusUpdatedTopicArn:
     Description: "Status Updated SNS Topic ARN"
     Value: !Ref StatusUpdatedTopic
+  DashboardDataBucketName:
+    Description: "Dashboard Data S3 Bucket Name for QuickSight"
+    Value: !Ref DashboardDataBucket

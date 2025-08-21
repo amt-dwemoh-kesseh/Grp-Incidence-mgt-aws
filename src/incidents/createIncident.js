@@ -4,87 +4,103 @@ const path = require("path");
 
 exports.handler = async (event) => {
   console.log("Function started");
-  
+
   try {
     // Initialize AWS services inside the handler (lazy initialization)
     const dynamo = new AWS.DynamoDB.DocumentClient();
     const s3 = new AWS.S3();
     const sns = new AWS.SNS();
-        
+
     // Extract user ID from Cognito JWT token
-    
+
     let cognitoUserId = "98999993-UUID-4d3c-8b2f-123456789012"; // Default for local testing
     let userEmail = "3samkus@gmail.com";
-    
+
     // Try to get from authorizer context (production)
     // if (event.requestContext?.authorizer?.claims) {
     //   cognitoUserId = event.requestContext.authorizer.claims.sub;
     //   userEmail = event.requestContext.authorizer.claims.email;
-      
-    // } 
+
+    // }
     // // Fallback: decode JWT from Authorization header (local development)
     // else if (event.headers?.Authorization || event.headers?.authorization) {
     //   const authHeader = event.headers.Authorization || event.headers.authorization;
     //   const token = authHeader.replace('Bearer ', '');
-      
+
     //   try {
     //     // Decode JWT payload (base64 decode the middle part)
     //     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-       
+
     //     cognitoUserId = payload.sub;
     //     userEmail = payload.email;
-        
+
     //   } catch (error) {
-        
+
     //     return {
     //       statusCode: 401,
     //       body: JSON.stringify({ error: "Invalid JWT token" }),
     //     };
     //   }
     // }
-    
+
     // if (!cognitoUserId) {
     //   return {
     //     statusCode: 401,
     //     body: JSON.stringify({ error: "Unauthorized - missing user context" }),
     //   };
     // }
-    
-    
+
+
 
     // Parse and validate input
     const body = JSON.parse(event.body);
-    
-    if (!body.title || !body.description) {
+
+
+    if (!body.title || !body.description || !body.category) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing required fields" }),
+        body: JSON.stringify({ error: "Missing required fields: title, description, category" }),
+      };
+    }
+
+    if (!validCategories.includes(body.category)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ 
+          error: "Invalid category", 
+          validCategories 
+        }),
       };
     }
 
     // Use authenticated user ID
     const userId = cognitoUserId;
 
-    // Create incident item
+    // Create incident item with queue processing
     const incidentId = uuidv4();
     const incident = {
       id: incidentId,
       userId,
+      userEmail,
       title: body.title,
       description: body.description,
-      status: "REPORTED",
+      category: body.category,
+      status: "QUEUED",
+      priority: body.priority || "MEDIUM",
+      location: body.location || null,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-    
+
 
     // Save to DynamoDB
     try {
       await dynamo
-        .put({
-          TableName: process.env.INCIDENT_TABLE,
-          Item: incident,
-        })
-        .promise();
+          .put({
+            TableName: process.env.INCIDENT_TABLE,
+            Item: incident,
+          })
+          .promise();
     } catch (dbError) {
       throw dbError;
     }
@@ -99,17 +115,38 @@ exports.handler = async (event) => {
       });
     }
 
-    // Publish to SNS
+    // Publish to SNS for processing
     try {
       await sns
-        .publish({
-          TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
-          Message: JSON.stringify({ incidentId, userId }),
-        })
-        .promise();
+          .publish({
+            TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
+            Message: JSON.stringify({ 
+              incidentId, 
+              userId, 
+              userEmail,
+              category: body.category,
+              priority: body.priority || "MEDIUM",
+              title: body.title 
+            }),
+            Subject: `New Incident Reported: ${body.category}`,
+          })
+          .promise();
+      
+      // Update status to REPORTED after successful notification
+      await dynamo
+          .update({
+            TableName: process.env.INCIDENT_TABLE,
+            Key: { id: incidentId },
+            UpdateExpression: "SET #status = :status, updatedAt = :updatedAt",
+            ExpressionAttributeNames: { "#status": "status" },
+            ExpressionAttributeValues: {
+              ":status": "REPORTED",
+              ":updatedAt": new Date().toISOString()
+            }
+          })
+          .promise();
     } catch (snsError) {
       console.error("SNS error:", snsError);
-
     }
 
     // Return response

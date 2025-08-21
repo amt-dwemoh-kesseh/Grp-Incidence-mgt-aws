@@ -1,0 +1,12 @@
+{
+  "fileLocations": [
+    {
+      "URIPrefixes": [
+        "s3://dashboard-data-605134436600/AWSDynamoDB/01755782588404-f983d60b/data/"
+      ]
+    }
+  ],
+  "globalUploadSettings": {
+    "format": "JSON"
+  }
+}
