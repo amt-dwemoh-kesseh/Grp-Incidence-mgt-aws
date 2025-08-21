@@ -4,149 +4,145 @@ const path = require("path");
 
 exports.handler = async (event) => {
   console.log("Function started");
-
+  
   try {
     // Initialize AWS services inside the handler (lazy initialization)
     const dynamo = new AWS.DynamoDB.DocumentClient();
-    const s3 = new AWS.S3();
+    // const s3 = new AWS.S3();
     const sns = new AWS.SNS();
-
+    
+        
     // Extract user ID from Cognito JWT token
-
+    
     let cognitoUserId = "98999993-UUID-4d3c-8b2f-123456789012"; // Default for local testing
     let userEmail = "3samkus@gmail.com";
-
+    
     // Try to get from authorizer context (production)
     // if (event.requestContext?.authorizer?.claims) {
     //   cognitoUserId = event.requestContext.authorizer.claims.sub;
     //   userEmail = event.requestContext.authorizer.claims.email;
-
-    // }
+      
+    // } 
     // // Fallback: decode JWT from Authorization header (local development)
     // else if (event.headers?.Authorization || event.headers?.authorization) {
     //   const authHeader = event.headers.Authorization || event.headers.authorization;
     //   const token = authHeader.replace('Bearer ', '');
-
+      
     //   try {
     //     // Decode JWT payload (base64 decode the middle part)
     //     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-
+       
     //     cognitoUserId = payload.sub;
     //     userEmail = payload.email;
-
+        
     //   } catch (error) {
-
+        
     //     return {
     //       statusCode: 401,
     //       body: JSON.stringify({ error: "Invalid JWT token" }),
     //     };
     //   }
     // }
-
+    
     // if (!cognitoUserId) {
     //   return {
     //     statusCode: 401,
     //     body: JSON.stringify({ error: "Unauthorized - missing user context" }),
     //   };
     // }
-
-
+    
+    
 
     // Parse and validate input
     const body = JSON.parse(event.body);
-
-
-    if (!body.title || !body.description || !body.category) {
+    console.log("Parsed body:", body);
+    
+    if (!body.title || !body.description) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing required fields: title, description, category" }),
-      };
-    }
-
-    if (!validCategories.includes(body.category)) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ 
-          error: "Invalid category", 
-          validCategories 
-        }),
+        body: JSON.stringify({ error: "Missing required fields" }),
       };
     }
 
     // Use authenticated user ID
     const userId = cognitoUserId;
 
-    // Create incident item with queue processing
+
+    let imageUrls = [];
+    
+    if (body.imageUrls && Array.isArray(body.imageUrls) && body.imageUrls.length > 0) {
+      // Validate image URLs
+      for (const imageUrl of body.imageUrls) {
+        if (!imageUrl || typeof imageUrl !== 'string') {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ error: "Invalid image URL provided" }),
+          };
+        }
+        
+        // Basic URL validation
+        try {
+          console.log("Validating image URL:", imageUrl);
+          new URL(imageUrl);
+          imageUrls.push(imageUrl);
+          console.log("Image URL is valid:", imageUrl);
+        } catch (error) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ error: "Invalid image URL format" }),
+          };
+        }
+      }
+    }
+
+    // Create incident item
     const incidentId = uuidv4();
     const incident = {
       id: incidentId,
       userId,
-      userEmail,
       title: body.title,
       description: body.description,
-      category: body.category,
-      status: "QUEUED",
-      priority: body.priority || "MEDIUM",
-      location: body.location || null,
+      status: "pending",
+      severity: body.severity,
+      location: body.location,
       createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      imageUrls,
     };
-
+    
 
     // Save to DynamoDB
     try {
       await dynamo
-          .put({
-            TableName: process.env.INCIDENT_TABLE,
-            Item: incident,
-          })
-          .promise();
+        .put({
+          TableName: process.env.INCIDENT_TABLE,
+          Item: incident,
+        })
+        .promise();
     } catch (dbError) {
       throw dbError;
     }
 
     // Generate S3 pre-signed URL for attachment (optional)
-    let uploadUrl;
-    if (body.attachmentFilename) {
-      uploadUrl = s3.getSignedUrl("putObject", {
-        Bucket: process.env.ATTACHMENT_BUCKET,
-        Key: `incidents/${incidentId}/${body.attachmentFilename}`,
-        Expires: 300,
-      });
-    }
+    // let uploadUrl;
+    // if (body.attachmentFilename) {
+    //   uploadUrl = s3.getSignedUrl("putObject", {
+    //     Bucket: process.env.ATTACHMENT_BUCKET,
+    //     Key: `incidents/${incidentId}/${body.attachmentFilename}`,
+    //     Expires: 300,
+    //   });
+    // }
 
-    // Publish to SNS for processing
+    // Publish to SNS
     try {
       await sns
-          .publish({
-            TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
-            Message: JSON.stringify({ 
-              incidentId, 
-              userId, 
-              userEmail,
-              category: body.category,
-              priority: body.priority || "MEDIUM",
-              title: body.title 
-            }),
-            Subject: `New Incident Reported: ${body.category}`,
-          })
-          .promise();
-      
-      // Update status to REPORTED after successful notification
-      await dynamo
-          .update({
-            TableName: process.env.INCIDENT_TABLE,
-            Key: { id: incidentId },
-            UpdateExpression: "SET #status = :status, updatedAt = :updatedAt",
-            ExpressionAttributeNames: { "#status": "status" },
-            ExpressionAttributeValues: {
-              ":status": "REPORTED",
-              ":updatedAt": new Date().toISOString()
-            }
-          })
-          .promise();
+        .publish({
+          TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
+          Message: JSON.stringify({ incidentId, userId }),
+        })
+        .promise();
     } catch (snsError) {
       console.error("SNS error:", snsError);
+
     }
 
     // Return response
@@ -155,7 +151,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         message: "Incident created",
         incidentId,
-        uploadUrl,
+        imageUrls,
       }),
     };
   } catch (error) {
