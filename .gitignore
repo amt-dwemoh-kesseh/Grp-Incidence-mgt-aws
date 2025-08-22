@@ -1,9 +1,11 @@
-src/node_modules
+node_modules/
+src/node_modules/
 local-env.json
 .env
 aws-tools.md
 test-lambda.js
-/src/package-lock.json
+package-lock.json
 .claude
 .aws-sam
 .github
+package.json

@@ -1,0 +1,119 @@
+{
+  "Comment": "Incident Status Update Workflow with Notifications",
+  "StartAt": "UpdateIncidentStatus",
+  "States": {
+    "UpdateIncidentStatus": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${IncidentTable}",
+        "Key": {
+          "id": {
+            "S.$": "$.incidentId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S.$": "$.newStatus"
+          },
+          ":updatedAt": {
+            "S.$": "$.timestamp"
+          },
+          ":updatedBy": {
+            "S.$": "$.updatedBy"
+          }
+        },
+        "ReturnValues": "ALL_NEW"
+      },
+      "Next": "GetIncidentDetails",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ]
+    },
+    "GetIncidentDetails": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:getItem",
+      "Parameters": {
+        "TableName": "${IncidentTable}",
+        "Key": {
+          "id": {
+            "S.$": "$.incidentId"
+          }
+        }
+      },
+      "Next": "NotifyReporter",
+      "ResultPath": "$.incidentDetails"
+    },
+    "NotifyReporter": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${StatusUpdatedTopic}",
+        "Message.$": "$.incidentDetails.Item",
+        "Subject.$": "States.Format('Incident Status Updated: {}', $.newStatus)",
+        "MessageAttributes": {
+          "incidentId": {
+            "DataType": "String",
+            "StringValue.$": "$.incidentId"
+          },
+          "newStatus": {
+            "DataType": "String",
+            "StringValue.$": "$.newStatus"
+          },
+          "userEmail": {
+            "DataType": "String",
+            "StringValue.$": "$.incidentDetails.Item.userEmail.S"
+          }
+        }
+      },
+      "Next": "CheckIfClosed"
+    },
+    "CheckIfClosed": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.newStatus",
+          "StringEquals": "CLOSED",
+          "Next": "SendClosureNotification"
+        }
+      ],
+      "Default": "Success"
+    },
+    "SendClosureNotification": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${StatusUpdatedTopic}",
+        "Message": "Your incident has been resolved and closed. Thank you for your report.",
+        "Subject": "Incident Closed - Resolution Complete",
+        "MessageAttributes": {
+          "incidentId": {
+            "DataType": "String",
+            "StringValue.$": "$.incidentId"
+          },
+          "userEmail": {
+            "DataType": "String",
+            "StringValue.$": "$.incidentDetails.Item.userEmail.S"
+          },
+          "notificationType": {
+            "DataType": "String",
+            "StringValue": "CLOSURE"
+          }
+        }
+      },
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed"
+    }
+  }
+}
