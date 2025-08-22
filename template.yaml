@@ -265,6 +265,11 @@ Resources:
         - "multipart/form-data"
         - "image/*"
         - "application/octet-stream"
+      Cors:
+        AllowMethods: "'OPTIONS,GET,POST,PUT'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+        AllowOrigin: "'*'"
+        AllowCredentials: false
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
