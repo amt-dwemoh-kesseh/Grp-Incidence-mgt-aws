@@ -9,3 +9,4 @@ test-lambda.js
 .github
 package-lock.json
 package.json
+node_modules
