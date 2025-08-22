@@ -36,35 +36,12 @@ Resources:
       IAMServiceRole: !GetAtt AmplifyRole.Arn
       AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecret}:SecretString:GithubAccessToken_}}"
       BuildSpec: |
-        version: 1
-        backend:
-          phases:
-            build:
-              commands:
-                - yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
-                - echo $AWS_BRANCH
-                - |
-                  case "${AWS_BRANCH}" in
-                    main)
-                        echo "Deploying main branch"
-                        npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
-                        ;;
-                    dev)
-                        echo "Deploying dev branch"
-                        npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
-                        ;;
-                    feature*)
-                        echo "Deploying feature branch"
-                        npx ampx generate outputs --branch previews --app-id $AWS_APP_ID
-                        ;;
-                    *)
-                        echo "No deployment for branch ${AWS_BRANCH}"
-                        ;;
-                  esac
+        version: 1 
         frontend:
           phases:
             preBuild:
               commands:
+                - yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
                 - npx ng version
             build:
               commands:
