@@ -1,4 +1,6 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Incident Reporting App - Auth & Authorization Infrastructure
 
 Transform: AWS::Serverless-2016-10-31
 Description: Monitoring & Reporting Platform Backend (MSc Real Estate Capstone)
@@ -10,7 +12,26 @@ Parameters:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
   GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
 
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 128
+    Runtime: python3.12
+    Handler: app.lambda_handler
+  Api:
+    Auth:
+      DefaultAuthorizer: CognitoAuth
+      Authorizers:
+        CognitoAuth:
+          UserPoolArn: !GetAtt UserPool.Arn
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin: "'http://localhost:4200,https://dev.d2zgxshg38rb8v.amplifyapp.com'"
+
 Resources:
+
+################################################## Amplify ####################################################
   AmplifyRole:
     Type: AWS::IAM::Role
     Properties:
@@ -71,10 +92,6 @@ Resources:
             target: /index.html
             status: 200
 
-
-
-
-
   MainBranch:
     Type: AWS::Amplify::Branch
     DependsOn: AmplifyApp
@@ -93,6 +110,245 @@ Resources:
       EnableAutoBuild: true
       Stage: DEVELOPMENT
 
+
+################################################## Cognito ####################################################
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: IncidentReportingUserPool
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      LambdaConfig:
+        CustomMessage: !GetAtt CustomMessageFunction.Arn
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: region
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+        - Name: country
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+        - Name: city
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+        - Name: telephone
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: IncidentReportingFrontendClient
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+      PreventUserExistenceErrors: ENABLED
+
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: IncidentReportingIdentityPool
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  # Cognito Groups
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: Admin
+      UserPoolId: !Ref UserPool
+      Precedence: 1
+
+  CityOfficialGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: CityOfficial
+      UserPoolId: !Ref UserPool
+      Precedence: 2
+
+  IdentityPoolAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IncidentReportingAuthRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                cognito-identity.amazonaws.com:amr: authenticated
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole 
+ 
+  IdentityPoolUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IncidentReportingUnauthRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                cognito-identity.amazonaws.com:amr: unauthenticated
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt IdentityPoolAuthRole.Arn
+        unauthenticated: !GetAtt IdentityPoolUnauthRole.Arn
+
+
+################################################## APIs & Functions ##########################################
+
+
+  AdminInviteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminInviteUserFunction
+      Description: Allows Admins to invite new Admins or City Officials
+      CodeUri: src/admin_invite/
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Layers:
+        - !Ref AuthUtilsLayer
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /invite
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuth
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /invite
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
+
+  CustomMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoCustomMessageFunction
+      Description: Customizes Cognito emails for invites and password resets
+      CodeUri: src/custom_message/
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: "*"
+
+
+  ListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ListUserStatsFunction
+      Description: Lists user counts by group and returns all users
+      CodeUri: src/list_users/
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Layers:
+        - !Ref AuthUtilsLayer
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:ListUsersInGroup
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuth
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /users
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
+  
+  AuthUtilsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: IncidentReportingAuthUtils
+      Description: Shared authorization utilities for admin-only Lambdas
+      ContentUri: layers/auth_utils/
+      CompatibleRuntimes:
+        - python3.12
+
+
+  CustomMessagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CustomMessageFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
 Outputs:
   AmplifyAppId:
     Description: The ID of the deployed Amplify application
@@ -100,3 +356,20 @@ Outputs:
   AmplifyAppName:
     Description: The name of the deployed Amplify application
     Value: !GetAtt AmplifyApp.AppName
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+
+  ApiGatewayUrl:
+    Description: Base URL for API Gateway
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+    
