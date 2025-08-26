@@ -12,23 +12,23 @@ on:
 env:
   SAM_TEMPLATE: template.yaml
   TESTING_STACK_NAME: sam-app-dev
-  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-dev-pipel-PipelineExecutionRole-MGE02xOLKOk3
-  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionRo-23FXejtrstlV
-  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-r-artifactsbucket-dodfx1fjktwh
+  TESTING_PIPELINE_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-dev-pipel-PipelineExecutionRole-mVIQvC2b1ps9
+  TESTING_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-dev-p-CloudFormationExecutionRo-vtgQSXlGijaJ
+  TESTING_ARTIFACTS_BUCKET: aws-sam-cli-managed-dev-pipeline-r-artifactsbucket-srhclqjttd3t
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${TESTING_IMAGE_REPOSITORY}" to
   # testing "sam package" and "sam deploy" commands.
   # TESTING_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
-  TESTING_REGION: eu-west-1
+  TESTING_REGION: eu-central-1
   PROD_STACK_NAME: sam-app
-  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-prod-pipe-PipelineExecutionRole-0Bv5RncUEOK2
-  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-prod--CloudFormationExecutionRo-VXqZUrxPdyl7
-  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-prod-pipeline--artifactsbucket-ag571qucllsv
+  PROD_PIPELINE_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-prod-pipe-PipelineExecutionRole-jfQ0S3d3wlSx
+  PROD_CLOUDFORMATION_EXECUTION_ROLE: arn:aws:iam::605134436600:role/aws-sam-cli-managed-prod--CloudFormationExecutionRo-fE8AUrmTOqPX
+  PROD_ARTIFACTS_BUCKET: aws-sam-cli-managed-prod-pipeline--artifactsbucket-xydjn7ndeova
   # If there are functions with "Image" PackageType in your template,
   # uncomment the line below and add "--image-repository ${PROD_IMAGE_REPOSITORY}" to
   # prod "sam package" and "sam deploy" commands.
   # PROD_IMAGE_REPOSITORY = '0123456789.dkr.ecr.region.amazonaws.com/repository-name'
-  PROD_REGION: eu-west-1
+  PROD_REGION: eu-central-1
 
 permissions:
   id-token: write
@@ -97,7 +97,7 @@ jobs:
         shell: bash
         run: |
           sam deploy --stack-name $(echo ${GITHUB_REF##*/} | tr -cd '[a-zA-Z0-9-]') \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_NAMED_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
@@ -184,7 +184,7 @@ jobs:
         run: |
           sam deploy --stack-name ${TESTING_STACK_NAME} \
             --template packaged-testing.yaml \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_NAMED_IAM \
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
@@ -228,7 +228,7 @@ jobs:
         run: |
           sam deploy --stack-name ${PROD_STACK_NAME} \
             --template packaged-prod.yaml \
-            --capabilities CAPABILITY_IAM \
+            --capabilities CAPABILITY_NAMED_IAM \
             --region ${PROD_REGION} \
             --s3-bucket ${PROD_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
