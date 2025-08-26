@@ -7,6 +7,7 @@ logger.setLevel(logging.INFO)
 def lambda_handler(event, context):
     trigger = event["triggerSource"]
     user_email = event["request"]["userAttributes"].get("email", "Unknown email")
+    name = event["request"]["userAttributes"].get("name", "User")
 
     brand_name = "CMRP"
     brand_color = "#1A1A1A"  # Bold minimal dark tone
@@ -39,7 +40,7 @@ def lambda_handler(event, context):
         event["response"]["emailSubject"] = f"Welcome to {brand_name}!"
         event["response"]["emailMessage"] = build_html_email(
             title="Verify Your Email",
-            message=f"Hi {user_email},<br><br>Thanks for signing up. Please use this code to verify your account:",
+            message=f"Hi {name},<br><br>Thanks for signing up. Please use this code to verify your account<br>Follow the link to verify your email address: localhost:4200/verify-otp?otp={event['request']['codeParameter']}<br>",
             code=event['request']['codeParameter']
         )
 
@@ -70,7 +71,7 @@ def lambda_handler(event, context):
         event["response"]["emailSubject"] = f"{brand_name} - Verify Your Email"
         event["response"]["emailMessage"] = build_html_email(
             title="Verify Your Email",
-            message=f"Hi {user_email},<br><br>Please use this code to verify your email address:",
+            message=f"Hi {name},<br><br>Please use this code to verify your email address:",
             code=event['request']['codeParameter']
         )
 
@@ -80,7 +81,7 @@ def lambda_handler(event, context):
         event["response"]["emailSubject"] = f"{brand_name} - Confirm Your Update"
         event["response"]["emailMessage"] = build_html_email(
             title="Confirm Your Update",
-            message=f"Hi {user_email},<br><br>We received a request to update your account information. "
+            message=f"Hi {name},<br><br>We received a request to update your account information. "
                     "Please use this code to confirm the change:",
             code=event['request']['codeParameter']
         )
@@ -91,7 +92,7 @@ def lambda_handler(event, context):
         event["response"]["emailSubject"] = f"{brand_name} - Verification Code"
         event["response"]["emailMessage"] = build_html_email(
             title="Verification Code",
-            message=f"Hi {user_email},<br><br>Here’s your requested verification code:",
+            message=f"Hi {name},<br><br>Here’s your requested verification code:",
             code=event['request']['codeParameter']
         )
 
@@ -101,7 +102,7 @@ def lambda_handler(event, context):
         event["response"]["emailSubject"] = f"{brand_name} - Authentication Code"
         event["response"]["emailMessage"] = build_html_email(
             title="Authentication Required",
-            message=f"Hi {user_email},<br><br>Please use this code to complete your sign-in:",
+            message=f"Hi {name},<br><br>Please use this code to complete your sign-in:",
             code=event['request']['codeParameter']
         )
 
