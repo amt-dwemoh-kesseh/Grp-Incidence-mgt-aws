@@ -30,8 +30,6 @@ Resources:
           AttributeType: S
         - AttributeName: status
           AttributeType: S
-        - AttributeName: reportedAt
-          AttributeType: S
         - AttributeName: reportedBy
           AttributeType: S
         - AttributeName: region
