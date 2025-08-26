@@ -259,6 +259,59 @@ Resources:
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt UserPool.Arn
 
+
+
+ ################################ SSM Parameters ################################
+
+  BaseUrlParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/baseUrl
+      Type: String
+      Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+      Description: API Gateway Base URL
+
+  IdentityPoolIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/identityPoolId
+      Type: String
+      Value: !Ref IdentityPool
+      Description: Cognito Identity Pool ID
+
+  UserPoolIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/userPoolId
+      Type: String
+      Value: !Ref UserPool
+      Description: Cognito User Pool ID
+
+  UserPoolClientIdParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/userClientPoolId
+      Type: String
+      Value: !Ref UserPoolClient
+      Description: Cognito User Pool Client ID
+
+  IncidentsUrlDevParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/incidentsUrlDev
+      Type: String
+      Value: "https://dev.d14lp2ufkilvts.amplifyapp.com/"
+      Description: Amplify Dev Frontend URL
+
+  IncidentsUrlMainParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /incident-reporting/incidentsUrlMain
+      Type: String
+      Value: "https://main.d14lp2ufkilvts.amplifyapp.com/"
+      Description: Amplify Main Frontend URL
+
+
 Outputs:
   UserPoolId:
     Description: Cognito User Pool ID
@@ -275,4 +328,28 @@ Outputs:
   ApiGatewayUrl:
     Description: Base URL for API Gateway
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+
+  BaseUrlSSMParameter:
+    Description: SSM Parameter ARN for API Base URL
+    Value: !Ref BaseUrlParameter
+
+  IdentityPoolIdSSMParameter:
+    Description: SSM Parameter ARN for Identity Pool ID
+    Value: !Ref IdentityPoolIdParameter
+
+  UserPoolIdSSMParameter:
+    Description: SSM Parameter ARN for User Pool ID
+    Value: !Ref UserPoolIdParameter
+
+  UserPoolClientIdSSMParameter:
+    Description: SSM Parameter ARN for User Pool Client ID
+    Value: !Ref UserPoolClientIdParameter
+
+  IncidentsUrlDevSSMParameter:
+    Description: SSM Parameter ARN for Amplify Dev URL
+    Value: !Ref IncidentsUrlDevParameter
+
+  IncidentsUrlMainSSMParameter:
+    Description: SSM Parameter ARN for Amplify Main URL
+    Value: !Ref IncidentsUrlMainParameter
     
