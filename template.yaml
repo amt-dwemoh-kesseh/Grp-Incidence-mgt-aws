@@ -51,7 +51,6 @@ Resources:
                   mkdir -p src/environments
                   echo "export const environment = {" > src/environments/environment.ts
                   echo "export const environment = {" > src/environments/environment.ts
-                  echo "  production: false," >> src/environments/environment.ts
                   echo "  authUrl: '$authUrl'," >> src/environments/environment.ts
                   echo "  identityPoolId: '$identityPoolId'," >> src/environments/environment.ts
                   echo "  userPoolId: '$userPoolId'," >> src/environments/environment.ts
