@@ -58,7 +58,7 @@ Resources:
                   echo "  userClientPoolId: '$userClientPoolId'," >> src/environments/environment.ts
                   echo "  incidentsUrl: '$incidentsUrl'," >> src/environments/environment.ts
                   echo "};" >> src/environments/environment.ts
-                - yarn run build
+                - yarn run build -- --configuration=production
           artifacts:
             baseDirectory: dist/cmrp-frontend/browser
             files:
