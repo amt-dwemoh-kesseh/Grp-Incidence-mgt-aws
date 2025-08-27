@@ -41,11 +41,23 @@ Resources:
           phases:
             preBuild:
               commands:
-                - yarn install --frozen-lockfile --cache-folder .yarn-cache --prefer-offline
+                - yarn install --cache-folder .yarn-cache --prefer-offline
                 - npx ng version
             build:
               commands:
-                - npx ng build --configuration=production
+                  # generate src/environments/environment.ts
+                - |
+                  mkdir -p src/environments
+                  echo "export const environment = {" > src/environments/environment.ts
+                  echo "export const environment = {" > src/environments/environment.ts
+                  echo "  production: false," >> src/environments/environment.ts
+                  echo "  authUrl: '$authUrl'," >> src/environments/environment.ts
+                  echo "  identityPoolId: '$identityPoolId'," >> src/environments/environment.ts
+                  echo "  userPoolId: '$userPoolId'," >> src/environments/environment.ts
+                  echo "  userClientPoolId: '$userClientPoolId'," >> src/environments/environment.ts
+                  echo "  incidentsUrl: '$incidentsUrl'," >> src/environments/environment.ts
+                  echo "};" >> src/environments/environment.ts
+                - yarn run build
           artifacts:
             baseDirectory: dist/cmrp-frontend/browser
             files:
@@ -54,6 +66,14 @@ Resources:
             paths:
               - .npm/**/*
               - node_modules/**/*
+        redirects:
+          - source: </^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|svg|woff|woff2|ttf|map)$)([^.]+$)/>
+            target: /index.html
+            status: 200
+
+
+
+
 
   MainBranch:
     Type: AWS::Amplify::Branch
