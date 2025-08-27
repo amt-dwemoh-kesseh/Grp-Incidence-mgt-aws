@@ -1,13 +1,103 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Minimal CloudFormation stack to provision a free AWS resource (S3 bucket) for testing SAM pipeline config."
+
+Transform: AWS::Serverless-2016-10-31
+Description: Monitoring & Reporting Platform Backend (MSc Real Estate Capstone)
+
+Parameters:
+  AppName: { Type: String, Default: Taskify }
+  ProjectTag: { Type: String, Default: "incident-app" }
+  GitRepoUrl:
+    { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
+  GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
 
 Resources:
-  TestS3Bucket:
-    Type: AWS::S3::Bucket
+  AmplifyRole:
+    Type: AWS::IAM::Role
     Properties:
-      BucketName: !Sub "dispose-later-bucket-${AWS::AccountId}-${AWS::Region}"
+      RoleName: AmplifyServiceRole
+      Description: IAM role assumed by AWS Amplify to build and deploy apps
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - amplify.amazonaws.com
+                - amplify.eu-central-1.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
+
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: IncidentReportingAmplifyApp
+      Description: Incident Reporting App
+      Repository: !Ref GitRepoUrl
+      IAMServiceRole: !GetAtt AmplifyRole.Arn
+      AccessToken: !Sub "{{resolve:secretsmanager:${GitHubTokenSecret}:SecretString:GithubAccessToken_}}"
+      BuildSpec: |
+        version: 1 
+        frontend:
+          phases:
+            preBuild:
+              commands:
+                - yarn install --cache-folder .yarn-cache --prefer-offline
+                - npx ng version
+            build:
+              commands:
+                  # generate src/environments/environment.ts
+                - |
+                  mkdir -p src/environments
+                  echo "export const environment = {" > src/environments/environment.ts
+                  echo "export const environment = {" > src/environments/environment.ts
+                  echo "  production: false," >> src/environments/environment.ts
+                  echo "  authUrl: '$authUrl'," >> src/environments/environment.ts
+                  echo "  identityPoolId: '$identityPoolId'," >> src/environments/environment.ts
+                  echo "  userPoolId: '$userPoolId'," >> src/environments/environment.ts
+                  echo "  userClientPoolId: '$userClientPoolId'," >> src/environments/environment.ts
+                  echo "  incidentsUrl: '$incidentsUrl'," >> src/environments/environment.ts
+                  echo "};" >> src/environments/environment.ts
+                - yarn run build
+          artifacts:
+            baseDirectory: dist/cmrp-frontend/browser
+            files:
+              - '**/*'
+          cache:
+            paths:
+              - .npm/**/*
+              - node_modules/**/*
+        redirects:
+          - source: </^[^.]+$|\\.(?!(css|gif|ico|jpg|jpeg|js|png|svg|woff|woff2|ttf|map)$)([^.]+$)/>
+            target: /index.html
+            status: 200
+
+
+
+
+
+  MainBranch:
+    Type: AWS::Amplify::Branch
+    DependsOn: AmplifyApp
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: main
+      EnableAutoBuild: true
+      Stage: PRODUCTION
+
+  DevBranch:
+    Type: AWS::Amplify::Branch
+    DependsOn: AmplifyApp
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: dev
+      EnableAutoBuild: true
+      Stage: DEVELOPMENT
 
 Outputs:
-  BucketName:
-    Description: "Name of the S3 bucket created"
-    Value: !Ref TestS3Bucket
+  AmplifyAppId:
+    Description: The ID of the deployed Amplify application
+    Value: !GetAtt AmplifyApp.AppId
+  AmplifyAppName:
+    Description: The name of the deployed Amplify application
+    Value: !GetAtt AmplifyApp.AppName
