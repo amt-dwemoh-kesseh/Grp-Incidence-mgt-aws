@@ -560,9 +560,9 @@ Resources:
       Handler: listIncidents.handler
       Runtime: nodejs22.x
       Environment:
-      Variables:
-        INCIDENT_TABLE: !Ref IncidentTable
-        ENV: !Ref Env
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
