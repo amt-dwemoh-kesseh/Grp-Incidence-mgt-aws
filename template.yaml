@@ -2,11 +2,7 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Incident Reporting App - Auth & Authorization Infrastructure
 
-Transform: AWS::Serverless-2016-10-31
-Description: Monitoring & Reporting Platform Backend (MSc Real Estate Capstone)
-
 Parameters:
-  AppName: { Type: String, Default: Taskify }
   ProjectTag: { Type: String, Default: "incident-app" }
   GitRepoUrl:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
@@ -15,9 +11,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 10
-    MemorySize: 128
-    Runtime: python3.12
-    Handler: app.lambda_handler
+    MemorySize: 256
   Api:
     Auth:
       DefaultAuthorizer: CognitoAuthorizer
@@ -94,7 +88,6 @@ Resources:
 
   MainBranch:
     Type: AWS::Amplify::Branch
-    DependsOn: AmplifyApp
     Properties:
       AppId: !GetAtt AmplifyApp.AppId
       BranchName: main
@@ -103,12 +96,135 @@ Resources:
 
   DevBranch:
     Type: AWS::Amplify::Branch
-    DependsOn: AmplifyApp
     Properties:
       AppId: !GetAtt AmplifyApp.AppId
       BranchName: dev
       EnableAutoBuild: true
       Stage: DEVELOPMENT
+
+
+    # DynamoDB Table for storing incident reports
+  
+  
+  ################################################## Amplify ####################################################
+  IncidentTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+        RecoveryPeriodInDays: 35
+
+      AttributeDefinitions:
+        - AttributeName: incidentId
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: reportedBy
+          AttributeType: S
+        - AttributeName: region
+          AttributeType: S
+        - AttributeName: city
+          AttributeType: S
+        - AttributeName: assignedTo
+          AttributeType: S
+        - AttributeName: severity
+          AttributeType: S
+      KeySchema:
+        - AttributeName: incidentId
+          KeyType: HASH
+
+      GlobalSecondaryIndexes:
+        - IndexName: ByStatusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: BySeverityIndex
+          KeySchema:
+            - AttributeName: severity
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ByCategoryIndex
+          KeySchema:
+            - AttributeName: category
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ByReportedByIndex
+          KeySchema:
+            - AttributeName: reportedBy
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ByAssignedToIndex
+          KeySchema:
+            - AttributeName: assignedTo
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ByRegionIndex
+          KeySchema:
+            - AttributeName: region
+              KeyType: HASH
+            - AttributeName: incidentId
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL    
+        - IndexName: ByCityCategoryIndex
+          KeySchema:
+            - AttributeName: city
+              KeyType: HASH
+            - AttributeName: category
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: ProjectTag
+          Value: !Ref ProjectTag
+
+  UserPoolBackupTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UserPoolBackupTable
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: backupDate
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: backupDate
+          KeyType: RANGE
+
+      Tags:
+        - Key: ProjectTag
+          Value: !Ref ProjectTag
 
 
 ################################################## Cognito ####################################################
@@ -230,27 +346,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
 
-      StageName: prod
-      BinaryMediaTypes:
-        - "multipart/form-data"
-        - "image/*"
-        - "application/octet-stream"
-      Cors:
-        AllowMethods: "'OPTIONS,GET,POST,PUT'"
-        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
-        AllowOrigin: "'*'"
-        AllowCredentials: false
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizerorizer
-        Authorizers:
-          CognitoAuthorizerorizer:
-            UserPoolArn: !GetAtt UserPool.Arn
-
   # Lambda Functions
   GetUploadUrlsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: incidents/getUploadUrls.handler
+      Runtime: nodejs22.x
       Policies:
         - S3WritePolicy:
             BucketName: !Ref IncidentAttachmentBucket
@@ -268,6 +369,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: incidents/createIncident.handler
+      Runtime: nodejs22.x
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -287,13 +389,6 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /incidents
-            Method: OPTIONS
-            Auth:
-              Authorizer: NONE
        
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
@@ -303,14 +398,53 @@ Resources:
         authenticated: !GetAtt IdentityPoolAuthRole.Arn
         unauthenticated: !GetAtt IdentityPoolUnauthRole.Arn
 
+  AuthUtilsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: IncidentReportingAuthUtils
+      Description: Shared authorization utilities for admin-only Lambdas
+      ContentUri: src/layers/auth_utils/
+      CompatibleRuntimes:
+        - python3.12
+
+  CustomMessagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CustomMessageFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
 
 ################################################## APIs & Functions ##########################################
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      BinaryMediaTypes:
+        - "multipart/form-data"
+        - "image/*"
+        - "application/octet-stream"
+      # Cors:
+      #   AllowMethods: "'OPTIONS,GET,POST,PUT'"
+      #   AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+      #   AllowOrigin: "'*'"
+      #   AllowCredentials: false
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
 
   AdminInviteFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
+      Runtime: python3.12
+      Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
         Variables:
@@ -318,11 +452,6 @@ Resources:
       Layers:
         - !Ref AuthUtilsLayer
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref IncidentTable
-        - SNSPublishMessagePolicy:
-            TopicName: !Ref IncidentReportedTopic
-        - Statement:
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -351,6 +480,8 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
+      Runtime: python3.12
+      Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
         - Version: '2012-10-17'
@@ -367,6 +498,8 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
+      Runtime: python3.12
+      Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
         Variables:
@@ -389,7 +522,7 @@ Resources:
             Path: /users
             Method: GET
             Auth:
-              Authorizer: CognitoAuthorizerorizer
+              Authorizer: CognitoAuthorizer
         OptionsEvent:
           Type: Api
           Properties:
@@ -402,6 +535,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: incidents/getMyIncidents.handler
+      Runtime: nodejs22.x
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -419,6 +553,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: incidents/listIncidents.handler
+      Runtime: nodejs22.x
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -428,26 +563,72 @@ Resources:
           Properties:
             RestApiId: !Ref ApiGateway
             Path: /incidents
-            Method: get
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+
+  UpdateIncidentStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: incidents/updateIncidentStatus.handler
+      Runtime: nodejs22.x
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref IncidentTable
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref StatusUpdatedTopic
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /incidents/{id}/status
+            Method: put
             Auth:
               Authorizer: NONE
   
-  AuthUtilsLayer:
-    Type: AWS::Serverless::LayerVersion
+  SubmitFeedbackFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      LayerName: IncidentReportingAuthUtils
-      Description: Shared authorization utilities for admin-only Lambdas
-      ContentUri: src/layers/auth_utils/
-      CompatibleRuntimes:
-        - python3.12
-
-  CustomMessagePermission:
-    Type: AWS::Lambda::Permission
+      Handler: feedback/submitFeedback.handler
+      Runtime: nodejs22.x
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref IncidentTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /feedback
+            Method: post
+            Auth:
+              Authorizer: NONE
+  
+  NotifyOfficialFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref CustomMessageFunction
-      Principal: cognito-idp.amazonaws.com
-      SourceArn: !GetAtt UserPool.Arn
+      Handler: notifications/notifyOfficial.handler
+      Runtime: nodejs22.x
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref IncidentReportedTopic
+  
+  NotifyReporterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: notifications/notifyReporter.handler
+      Runtime: nodejs22.x
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref StatusUpdatedTopic
 
 
 
@@ -501,8 +682,38 @@ Resources:
       Value: "https://main.d14lp2ufkilvts.amplifyapp.com/"
       Description: Amplify Main Frontend URL
 
+    # S3 Bucket
+  
+  IncidentAttachmentBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "incident-attachments-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # SNS Topics
+  IncidentReportedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: incident-reported
+  StatusUpdatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: status-updated
+
 
 Outputs:
+  
+  IncidentTableName:
+    Description: The name of the DynamoDB table for incident reports
+    Value: !Ref IncidentTable
+  UserPoolBackupTableName:
+    Description: The name of the DynamoDB table for incident reports
+    Value: !Ref UserPoolBackupTable
+
   AmplifyAppId:
     Description: The ID of the deployed Amplify application
     Value: !GetAtt AmplifyApp.AppId
@@ -549,4 +760,3 @@ Outputs:
   IncidentsUrlMainSSMParameter:
     Description: SSM Parameter ARN for Amplify Main URL
     Value: !Ref IncidentsUrlMainParameter
-    
