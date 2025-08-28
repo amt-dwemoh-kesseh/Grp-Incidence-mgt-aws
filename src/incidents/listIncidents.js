@@ -1,4 +1,4 @@
-const AWS = require("aws-sdk");
+import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
 
 const ALLOWED_ORIGINS = [
   "http://localhost:4200",
@@ -11,7 +11,12 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
-exports.handler = async (event) => {
+const client = new DynamoDBClient({
+  region: process.env.AWS_REGION || "eu-central-1",
+});
+
+
+export const handler = async (event) => {
   try {
     // Configure AWS SDK with region and timeout
     AWS.config.update({
@@ -30,7 +35,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const dynamo = new AWS.DynamoDB.DocumentClient();
+    // const dynamo = new AWS.DynamoDB.DocumentClient();
 
     // Skip authorization check for testing
 
@@ -38,10 +43,10 @@ exports.handler = async (event) => {
     if (!process.env.INCIDENT_TABLE) {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
-
+    
     const params = { TableName: process.env.INCIDENT_TABLE };
-
-    const result = await dynamo.scan(params).promise();
+    
+    const result = await client.send(new ScanCommand(params));
     console.log("DynamoDB scan completed, found", result.Items.length, "items");
 
     return {
