@@ -1,4 +1,4 @@
-import { DynamoDBClient, ScanCommand } from "@aws-sdk/client-dynamodb";
+const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
 
 const ALLOWED_ORIGINS = [
   "http://localhost:4200",
@@ -16,7 +16,7 @@ const client = new DynamoDBClient({
 });
 
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   try {
     // Configure AWS SDK with region and timeout
     AWS.config.update({
