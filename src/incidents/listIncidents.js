@@ -1,5 +1,7 @@
 const AWS = require("aws-sdk");
 
+
+
 exports.handler = async (event) => {
   try {
     // Configure AWS SDK with region and timeout
@@ -10,6 +12,7 @@ exports.handler = async (event) => {
         connectTimeout: 5000,
       },
     });
+    
 
     const dynamo = new AWS.DynamoDB.DocumentClient();
 
@@ -27,6 +30,11 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Methods": "GET,OPTIONS"
+      },
       body: JSON.stringify({ incidents: result.Items }),
     };
   } catch (err) {

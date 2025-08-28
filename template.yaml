@@ -530,7 +530,7 @@ Resources:
             Path: /users
             Method: OPTIONS
             Auth:
-              Authorizer: CognitoAuthorizer
+              Authorizer: NONE
 
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
