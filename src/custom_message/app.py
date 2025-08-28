@@ -1,5 +1,4 @@
 import logging
-import urllib.parse
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -12,7 +11,7 @@ def lambda_handler(event, context):
 
     brand_name = "CMRP"
     brand_color = "#1A1A1A"  # Bold minimal dark tone
-    accent_color = "#D72638" # A striking red accent for buttons or highlights
+    accent_color = "#111C43FF" # A striking red accent for buttons or highlights
 
     def build_html_email(title, message, code=None):
         code_block = f"""
@@ -41,53 +40,43 @@ def lambda_handler(event, context):
         logger.info(f"CustomMessage_SignUp triggered for {user_email}")
         
         event["response"]["emailSubject"] = f"Welcome to {brand_name}!"
+        code = event['request']['codeParameter']
         
-        encoded_email = urllib.parse.quote(user_email)
-
-        verify_link = (
-            f"http://localhost:4200/verify-otp?"
-            f"otp={event['request']['codeParameter']}&email={encoded_email}"
-        )
+        verify_link = f"http://localhost:4200/verify-otp?otp={event['request']['codeParameter']}"
         
-        event["response"]["emailMessage"] = build_html_email(
-            title="Verify Your Email",
-            message=(
+        message = (
                 f"Hi {name},<br><br>"
-                f"Thanks for signing up. Please use this code to verify your account.<br><br>"
+                f"Thanks for signing up. Please use this code to verify your account:"
+                f"<span style='font-weight:bold; color:{accent_color}'>{code}</span><br><br>"
                 f"<a href='{verify_link}' "
                 f"style='display:inline-block; margin-top:20px; padding:12px 20px; background-color:{accent_color}; "
                 f"color:white; text-decoration:none; border-radius:6px; font-size:16px;'>"
-                f"Verify Email</a><br>"
-            ),
-            code=event['request']['codeParameter']
-        )
+                f"Verify Email</a><br>" )
+        title = "Welcome to CMRP - Verify Your Email"
+        
+        event["response"]["emailMessage"] = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; background-color: #F9F9F9; padding: 20px;">
+                    <div style="max-width: 500px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                        <h1 style="color: {brand_color}; font-size: 28px; margin-bottom: 10px;">{brand_name}</h1>
+                        <h2 style="color: {brand_color}; font-size: 20px; margin-bottom: 20px;">{title}</h2>
+                        <p style="color: #333; font-size: 18px; line-height: 1.5;">{message}</p>
+                        <p style="margin-top: 30px; font-size: 12px; color: #888;">If you did not request this, please ignore this email.</p>
+                    </div>
+                </body>
+            </html>
+            """
 
     elif trigger == "CustomMessage_AdminCreateUser":
         logger.info(f"CustomMessage_AdminCreateUser triggered for {user_email}")
-
-        temp_password = event['request']['codeParameter']
-        reset_link = (
-            f"http://localhost:4200/reset-password?"
-            f"tempPassword={temp_password}&email={urllib.parse.quote(user_email)}"
-        )
-
+        
         event["response"]["emailSubject"] = f"You’ve been invited to {brand_name}"
         event["response"]["emailMessage"] = build_html_email(
             title="Your Account Invitation",
-            message=(
-                "Hello,<br><br>"
-                "You have been invited to our Incident Reporting system.<br><br>"
-                f"<strong>Temporary Password:</strong> {temp_password}<br>"
-                f"<strong>Email:</strong> {user_email}<br><br>"
-                f"<a href='{reset_link}' "
-                "style='display:inline-block;padding:10px 20px;margin-top:10px;"
-                "font-size:16px;color:white;background-color:#007BFF;"
-                "text-decoration:none;border-radius:5px;'>"
-                "Reset Password</a>"
-            ),
-            code=temp_password
+            message="Hello,<br><br>You have been invited to our Incident Reporting system. "
+                    "Use the temporary password below to log in and set a new password:",
+            code=event['request']['codeParameter']
         )
-
 
     elif trigger == "CustomMessage_ForgotPassword":
         logger.info(f"CustomMessage_ForgotPassword triggered for {user_email}")
