@@ -7,6 +7,7 @@ Parameters:
   GitRepoUrl:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
   GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
+  Env: { Type: String, Default: dev }
 
 Globals:
   Function:
@@ -29,7 +30,7 @@ Resources:
   AmplifyRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: AmplifyServiceRole
+      RoleName: !Sub AmplifyServiceRole${Env}
       Description: IAM role assumed by AWS Amplify to build and deploy apps
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -46,7 +47,7 @@ Resources:
   AmplifyApp:
     Type: AWS::Amplify::App
     Properties:
-      Name: IncidentReportingAmplifyApp
+      Name: !Sub IncidentReportingAmplifyApp${Env}
       Description: Incident Reporting App
       Repository: !Ref GitRepoUrl
       IAMServiceRole: !GetAtt AmplifyRole.Arn
@@ -205,7 +206,7 @@ Resources:
   UserPoolBackupTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: UserPoolBackupTable
+      TableName: !Sub UserPoolBackupTable${Env}
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification:
         AttributeName: ttl
@@ -232,7 +233,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: IncidentReportingUserPool
+      UserPoolName: !Sub IncidentReportingUserPool${Env}
       UsernameAttributes:
         - email
       AutoVerifiedAttributes:
@@ -285,7 +286,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: IncidentReportingIdentityPool
+      IdentityPoolName: !Sub IncidentReportingIdentityPool${Env}
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -310,7 +311,7 @@ Resources:
   IdentityPoolAuthRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: IncidentReportingAuthRole
+      RoleName: !Sub IncidentReportingAuthRole${Env}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -330,7 +331,7 @@ Resources:
   IdentityPoolUnauthRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: IncidentReportingUnauthRole
+      RoleName: !Sub IncidentReportingUnauthRole${Env}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -401,7 +402,7 @@ Resources:
   AuthUtilsLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: IncidentReportingAuthUtils
+      LayerName: !Sub IncidentReportingAuthUtils${Env}
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
@@ -441,7 +442,7 @@ Resources:
   AdminInviteFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: AdminInviteUserFunction
+      FunctionName: !Sub AdminInviteUserFunction${Env}
       Description: Allows Admins to invite new Admins or City Officials
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -478,7 +479,7 @@ Resources:
   CustomMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: CognitoCustomMessageFunction
+      FunctionName: !Sub CognitoCustomMessageFunction${Env}
       Description: Customizes Cognito emails for invites and password resets
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -496,7 +497,7 @@ Resources:
   ListUsersFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: ListUserStatsFunction
+      FunctionName: !Sub ListUserStatsFunction${Env}
       Description: Lists user counts by group and returns all users
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -630,64 +631,10 @@ Resources:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
 
-
-
- ################################ SSM Parameters ################################
-
-  BaseUrlParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/baseUrl
-      Type: String
-      Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-      Description: API Gateway Base URL
-
-  IdentityPoolIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/identityPoolId
-      Type: String
-      Value: !Ref IdentityPool
-      Description: Cognito Identity Pool ID
-
-  UserPoolIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/userPoolId
-      Type: String
-      Value: !Ref UserPool
-      Description: Cognito User Pool ID
-
-  UserPoolClientIdParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/userClientPoolId
-      Type: String
-      Value: !Ref UserPoolClient
-      Description: Cognito User Pool Client ID
-
-  IncidentsUrlDevParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/incidentsUrlDev
-      Type: String
-      Value: "https://dev.d14lp2ufkilvts.amplifyapp.com/"
-      Description: Amplify Dev Frontend URL
-
-  IncidentsUrlMainParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /incident-reporting/incidentsUrlMain
-      Type: String
-      Value: "https://main.d14lp2ufkilvts.amplifyapp.com/"
-      Description: Amplify Main Frontend URL
-
-    # S3 Bucket
-  
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "incident-attachments-${AWS::AccountId}"
+      BucketName: !Sub "incident-attachments-${Env}-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -698,11 +645,11 @@ Resources:
   IncidentReportedTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: incident-reported
+      TopicName: !Sub "incident-reported-${Env}"
   StatusUpdatedTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: status-updated
+      TopicName: !Sub "status-updated-${Env}"
 
 
 Outputs:
@@ -736,27 +683,3 @@ Outputs:
   ApiGatewayUrl:
     Description: Base URL for API Gateway
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
-
-  BaseUrlSSMParameter:
-    Description: SSM Parameter ARN for API Base URL
-    Value: !Ref BaseUrlParameter
-
-  IdentityPoolIdSSMParameter:
-    Description: SSM Parameter ARN for Identity Pool ID
-    Value: !Ref IdentityPoolIdParameter
-
-  UserPoolIdSSMParameter:
-    Description: SSM Parameter ARN for User Pool ID
-    Value: !Ref UserPoolIdParameter
-
-  UserPoolClientIdSSMParameter:
-    Description: SSM Parameter ARN for User Pool Client ID
-    Value: !Ref UserPoolClientIdParameter
-
-  IncidentsUrlDevSSMParameter:
-    Description: SSM Parameter ARN for Amplify Dev URL
-    Value: !Ref IncidentsUrlDevParameter
-
-  IncidentsUrlMainSSMParameter:
-    Description: SSM Parameter ARN for Amplify Main URL
-    Value: !Ref IncidentsUrlMainParameter
