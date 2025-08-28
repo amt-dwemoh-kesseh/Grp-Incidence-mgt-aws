@@ -360,7 +360,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /upload-urls
             Method: post
             Auth:
@@ -385,7 +385,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /incidents
             Method: post
             Auth:
@@ -544,7 +544,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /incidents/mine
             Method: get
             Auth:
@@ -562,7 +562,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /incidents
             Method: GET
             Auth:
@@ -589,7 +589,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /incidents/{id}/status
             Method: put
             Auth:
@@ -607,7 +607,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            RestApiId: !Ref ApiGateway
+            # RestApiId: !Ref ApiGateway
             Path: /feedback
             Method: post
             Auth:
