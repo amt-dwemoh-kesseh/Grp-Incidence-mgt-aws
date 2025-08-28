@@ -20,9 +20,9 @@ Globals:
         CognitoAuthorizer:
           UserPoolArn: !GetAtt UserPool.Arn
     Cors:
-      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowMethods: "'GET, POST, OPTIONS, PUT'"
       AllowHeaders: "'Content-Type,Authorization'"
-      AllowOrigin: "'http://localhost:4200,https://dev.d2zgxshg38rb8v.amplifyapp.com'"
+      AllowOrigin: "'http://localhost:4200, https://dev.d2zgxshg38rb8v.amplifyapp.com'"
 
 Resources:
 
