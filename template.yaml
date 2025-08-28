@@ -419,25 +419,25 @@ Resources:
 
 ################################################## APIs & Functions ##########################################
 
-  # API Gateway
-  ApiGateway:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: prod
-      BinaryMediaTypes:
-        - "multipart/form-data"
-        - "image/*"
-        - "application/octet-stream"
-      # Cors:
-      #   AllowMethods: "'OPTIONS,GET,POST,PUT'"
-      #   AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
-      #   AllowOrigin: "'*'"
-      #   AllowCredentials: false
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn: !GetAtt UserPool.Arn
+  # # API Gateway
+  # ApiGateway:
+  #   Type: AWS::Serverless::Api
+  #   Properties:
+  #     StageName: prod
+  #     BinaryMediaTypes:
+  #       - "multipart/form-data"
+  #       - "image/*"
+  #       - "application/octet-stream"
+  #     # Cors:
+  #     #   AllowMethods: "'OPTIONS,GET,POST,PUT'"
+  #     #   AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+  #     #   AllowOrigin: "'*'"
+  #     #   AllowCredentials: false
+  #     Auth:
+  #       DefaultAuthorizer: CognitoAuthorizer
+  #       Authorizers:
+  #         CognitoAuthorizer:
+  #           UserPoolArn: !GetAtt UserPool.Arn
 
   AdminInviteFunction:
     Type: AWS::Serverless::Function
