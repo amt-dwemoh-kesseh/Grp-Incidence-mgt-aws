@@ -64,14 +64,30 @@ def lambda_handler(event, context):
 
     elif trigger == "CustomMessage_AdminCreateUser":
         logger.info(f"CustomMessage_AdminCreateUser triggered for {user_email}")
-        
+
+        temp_password = event['request']['codeParameter']
+        reset_link = (
+            f"http://localhost:4200/reset-password?"
+            f"tempPassword={temp_password}&email={urllib.parse.quote(user_email)}"
+        )
+
         event["response"]["emailSubject"] = f"You’ve been invited to {brand_name}"
         event["response"]["emailMessage"] = build_html_email(
             title="Your Account Invitation",
-            message="Hello,<br><br>You have been invited to our Incident Reporting system. "
-                    "Use the temporary password below to log in and set a new password:",
-            code=event['request']['codeParameter']
+            message=(
+                "Hello,<br><br>"
+                "You have been invited to our Incident Reporting system.<br><br>"
+                f"<strong>Temporary Password:</strong> {temp_password}<br>"
+                f"<strong>Email:</strong> {user_email}<br><br>"
+                f"<a href='{reset_link}' "
+                "style='display:inline-block;padding:10px 20px;margin-top:10px;"
+                "font-size:16px;color:white;background-color:#007BFF;"
+                "text-decoration:none;border-radius:5px;'>"
+                "Reset Password</a>"
+            ),
+            code=temp_password
         )
+
 
     elif trigger == "CustomMessage_ForgotPassword":
         logger.info(f"CustomMessage_ForgotPassword triggered for {user_email}")
