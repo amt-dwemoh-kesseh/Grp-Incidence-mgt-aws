@@ -1,4 +1,5 @@
 import logging
+import urllib.parse
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -41,7 +42,12 @@ def lambda_handler(event, context):
         
         event["response"]["emailSubject"] = f"Welcome to {brand_name}!"
         
-        verify_link = f"http://localhost:4200/verify-otp?otp={event['request']['codeParameter']}"
+        encoded_email = urllib.parse.quote(user_email)
+
+        verify_link = (
+            f"http://localhost:4200/verify-otp?"
+            f"otp={event['request']['codeParameter']}&email={encoded_email}"
+        )
         
         event["response"]["emailMessage"] = build_html_email(
             title="Verify Your Email",
