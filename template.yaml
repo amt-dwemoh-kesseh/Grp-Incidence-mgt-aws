@@ -351,7 +351,8 @@ Resources:
   GetUploadUrlsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/getUploadUrls.handler
+      CodeUri: src/incidents/
+      Handler: getUploadUrls.handler
       Runtime: nodejs22.x
       Policies:
         - S3WritePolicy:
@@ -369,7 +370,8 @@ Resources:
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/createIncident.handler
+      CodeUri: src/incidents/
+      Handler: createIncident.handler
       Runtime: nodejs22.x
       Policies:
         - DynamoDBCrudPolicy:
@@ -535,7 +537,8 @@ Resources:
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/getMyIncidents.handler
+      CodeUri: src/incidents/
+      Handler: getMyIncidents.handler
       Runtime: nodejs22.x
       Policies:
         - DynamoDBReadPolicy:
@@ -553,8 +556,13 @@ Resources:
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/listIncidents.handler
+      CodeUri: src/incidents/
+      Handler: listIncidents.handler
       Runtime: nodejs22.x
+      Environment:
+      Variables:
+        INCIDENT_TABLE: !Ref IncidentTable
+        ENV: !Ref Env
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -578,7 +586,8 @@ Resources:
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/updateIncidentStatus.handler
+      CodeUri: src/incidents/
+      Handler: updateIncidentStatus.handler
       Runtime: nodejs22.x
       Policies:
         - DynamoDBCrudPolicy:
@@ -598,7 +607,8 @@ Resources:
   SubmitFeedbackFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: feedback/submitFeedback.handler
+      CodeUri: src/feedback/
+      Handler: submitFeedback.handler
       Runtime: nodejs22.x
       Policies:
         - DynamoDBCrudPolicy:
@@ -616,7 +626,8 @@ Resources:
   NotifyOfficialFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: notifications/notifyOfficial.handler
+      CodeUri: src/notifications/
+      Handler: notifyOfficial.handler
       Runtime: nodejs22.x
       Policies:
         - SNSPublishMessagePolicy:
@@ -625,7 +636,8 @@ Resources:
   NotifyReporterFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: notifications/notifyReporter.handler
+      CodeUri: src/notifications/
+      Handler: notifyReporter.handler
       Runtime: nodejs22.x
       Policies:
         - SNSPublishMessagePolicy:
@@ -682,4 +694,4 @@ Outputs:
 
   ApiGatewayUrl:
     Description: Base URL for API Gateway
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

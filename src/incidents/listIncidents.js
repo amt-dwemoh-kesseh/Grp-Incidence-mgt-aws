@@ -1,8 +1,12 @@
 const AWS = require("aws-sdk");
 
+const ALLOWED_ORIGINS = [
+  "http://localhost:4200",
+  "https://dev.d2zgxshg38rb8v.amplifyapp.com",
+];
+
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin":
-    "http://localhost:4200, https://dev.d2zgxshg38rb8v.amplifyapp.com",
+  "Access-Control-Allow-Origin": "http://localhost:4200",
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
