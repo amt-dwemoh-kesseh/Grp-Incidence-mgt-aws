@@ -7,3 +7,4 @@ test-lambda.js
 .claude
 .aws-sam
 .git
+samconfig.toml
