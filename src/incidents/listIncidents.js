@@ -1,6 +1,11 @@
 const AWS = require("aws-sdk");
 
-
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin":
+    "http://localhost:4200,https://dev.d2zgxshg38rb8v.amplifyapp.com",
+  "Access-Control-Allow-Methods": "OPTIONS,POST",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
+};
 
 exports.handler = async (event) => {
   try {
@@ -12,7 +17,14 @@ exports.handler = async (event) => {
         connectTimeout: 5000,
       },
     });
-    
+
+    if (event['httpMethod'] == 'OPTIONS') {
+        return {
+            "statusCode": 200,
+            "headers": CORS_HEADERS,
+            "body": ""
+        }
+      }
 
     const dynamo = new AWS.DynamoDB.DocumentClient();
 
@@ -30,17 +42,14 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type,Authorization",
-        "Access-Control-Allow-Methods": "GET,OPTIONS"
-      },
+      headers: CORS_HEADERS,
       body: JSON.stringify({ incidents: result.Items }),
     };
   } catch (err) {
     console.error(err);
     return {
       statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({ error: "Something went wrong!" }),
     };
   }
