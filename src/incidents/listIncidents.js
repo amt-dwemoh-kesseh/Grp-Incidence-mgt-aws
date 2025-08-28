@@ -19,13 +19,13 @@ const client = new DynamoDBClient({
 exports.handler = async (event) => {
   try {
     // Configure AWS SDK with region and timeout
-    AWS.config.update({
-      region: process.env.AWS_REGION || "eu-central-1",
-      httpOptions: {
-        timeout: 5000,
-        connectTimeout: 5000,
-      },
-    });
+    // AWS.config.update({
+    //   region: process.env.AWS_REGION || "eu-central-1",
+    //   httpOptions: {
+    //     timeout: 5000,
+    //     connectTimeout: 5000,
+    //   },
+    // });
 
     if (event["httpMethod"] == "OPTIONS") {
       return {
