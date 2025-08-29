@@ -30,7 +30,7 @@ Resources:
   AmplifyRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub AmplifyServiceRole${Env}
+      RoleName: AmplifyServiceRole
       Description: IAM role assumed by AWS Amplify to build and deploy apps
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -47,7 +47,7 @@ Resources:
   AmplifyApp:
     Type: AWS::Amplify::App
     Properties:
-      Name: !Sub IncidentReportingAmplifyApp${Env}
+      Name: IncidentReportingAmplifyApp
       Description: Incident Reporting App
       Repository: !Ref GitRepoUrl
       IAMServiceRole: !GetAtt AmplifyRole.Arn
@@ -206,7 +206,7 @@ Resources:
   UserPoolBackupTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub UserPoolBackupTable${Env}
+      TableName: UserPoolBackupTable
       BillingMode: PAY_PER_REQUEST
       TimeToLiveSpecification:
         AttributeName: ttl
@@ -233,7 +233,7 @@ Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Sub IncidentReportingUserPool${Env}
+      UserPoolName: IncidentReportingUserPool
       UsernameAttributes:
         - email
       AutoVerifiedAttributes:
@@ -286,7 +286,7 @@ Resources:
   IdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub IncidentReportingIdentityPool${Env}
+      IdentityPoolName: IncidentReportingIdentityPool
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref UserPoolClient
@@ -311,7 +311,7 @@ Resources:
   IdentityPoolAuthRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub IncidentReportingAuthRole${Env}
+      RoleName: IncidentReportingAuthRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -331,7 +331,7 @@ Resources:
   IdentityPoolUnauthRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub IncidentReportingUnauthRole${Env}
+      RoleName: IncidentReportingUnauthRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -404,7 +404,7 @@ Resources:
   AuthUtilsLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: !Sub IncidentReportingAuthUtils${Env}
+      LayerName: IncidentReportingAuthUtils
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
@@ -444,7 +444,7 @@ Resources:
   AdminInviteFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub AdminInviteUserFunction${Env}
+      FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -481,7 +481,7 @@ Resources:
   CustomMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub CognitoCustomMessageFunction${Env}
+      FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -499,7 +499,7 @@ Resources:
   ListUsersFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub ListUserStatsFunction${Env}
+      FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
       Runtime: python3.12
       Handler: app.lambda_handler
@@ -646,7 +646,7 @@ Resources:
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "incident-attachments-${Env}-${AWS::AccountId}"
+      BucketName: !Sub "incident-attachments-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -657,11 +657,11 @@ Resources:
   IncidentReportedTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "incident-reported-${Env}"
+      TopicName: "incident-reported"
   StatusUpdatedTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub "status-updated-${Env}"
+      TopicName: "status-updated"
 
 
 Outputs:
