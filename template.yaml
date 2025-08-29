@@ -651,9 +651,20 @@ Resources:
       CodeUri: src/notifications/
       Handler: notifyOfficial.handler
       Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          INCIDENT_REPORTED_TOPIC: !Ref IncidentReportedTopic
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref IncidentReportedTopic
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
+      Events:
+        IncidentReportedEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref IncidentReportedTopic
   
   NotifyReporterFunction:
     Type: AWS::Serverless::Function
@@ -664,6 +675,11 @@ Resources:
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
+      Events:
+        StatusUpdatedEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref StatusUpdatedTopic
 
   GetPublicDashboardFunction:
     Type: AWS::Serverless::Function
