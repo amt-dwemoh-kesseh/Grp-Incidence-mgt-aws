@@ -4,49 +4,111 @@ const sns = new AWS.SNS();
 
 exports.handler = async (event) => {
   try {
-    // Skip authorization check for testing
+    // Extract user info for authorization
+    let updatedBy = "system";
+    let userGroups = [];
+    
+    // For local testing, skip auth
+    if (event.requestContext?.authorizer?.claims) {
+      updatedBy = event.requestContext.authorizer.claims.sub;
+      userGroups = event.requestContext.authorizer.claims['cognito:groups'] || [];
+      
+      // Check permissions - only cityAuth and admin can update status
+      const canUpdate = userGroups.includes('cityAuth') || userGroups.includes('admin');
+      if (!canUpdate) {
+        return {
+          statusCode: 403,
+          body: JSON.stringify({ error: "Insufficient permissions to update incident status" }),
+        };
+      }
+    }
 
-    // Parse path and body
     const incidentId = event.pathParameters.id;
     const body = JSON.parse(event.body);
-    if (!body.status) {
+    
+    const validStatuses = ['pending', 'in-progress', 'under-review', 'resolved', 'closed', 'rejected'];
+    
+    if (!body.status || !validStatuses.includes(body.status)) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing status" }),
+        body: JSON.stringify({ 
+          error: "Invalid status", 
+          validStatuses 
+        }),
       };
     }
 
-    // Update incident status in DynamoDB
-    const params = {
+    // Get current incident to capture previous status
+    const currentIncident = await dynamo.get({
       TableName: process.env.INCIDENT_TABLE,
-      Key: { id: incidentId },
-      UpdateExpression: "set #s = :s",
-      ExpressionAttributeNames: { "#s": "status" },
-      ExpressionAttributeValues: { ":s": body.status },
-      ReturnValues: "ALL_NEW",
+      Key: { incidentId: incidentId }
+    }).promise();
+    
+    if (!currentIncident.Item) {
+      return {
+        statusCode: 404,
+        body: JSON.stringify({ error: "Incident not found" }),
+      };
+    }
+    
+    const previousStatus = currentIncident.Item.status;
+    
+    // Update incident status in DynamoDB
+    const updateParams = {
+      TableName: process.env.INCIDENT_TABLE,
+      Key: { incidentId: incidentId },
+      UpdateExpression: "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy",
+      ExpressionAttributeNames: {
+        "#status": "status"
+      },
+      ExpressionAttributeValues: {
+        ":status": body.status,
+        ":updatedAt": new Date().toISOString(),
+        ":updatedBy": updatedBy
+      },
+      ReturnValues: "ALL_NEW"
     };
-    const result = await dynamo.update(params).promise();
-
-    // Publish to SNS
-    await sns
-      .publish({
-        TopicArn: process.env.STATUS_UPDATED_TOPIC,
-        Message: JSON.stringify({ incidentId, status: body.status }),
-      })
-      .promise();
+    
+    if (body.comments) {
+      updateParams.UpdateExpression += ", comments = :comments";
+      updateParams.ExpressionAttributeValues[":comments"] = body.comments;
+    }
+    
+    const updateResult = await dynamo.update(updateParams).promise();
+    
+    // Publish status update notification to SNS
+    const notificationData = {
+      incidentId,
+      newStatus: body.status,
+      previousStatus,
+      updatedBy,
+      comments: body.comments || null,
+      timestamp: new Date().toISOString()
+    };
+    
+    await sns.publish({
+      TopicArn: process.env.STATUS_UPDATED_TOPIC,
+      Message: JSON.stringify(notificationData),
+      Subject: `Incident Status Updated: ${incidentId}`
+    }).promise();
 
     return {
       statusCode: 200,
       body: JSON.stringify({
-        message: "Incident status updated",
-        incident: result.Attributes,
+        message: "Incident status updated successfully",
+        incident: updateResult.Attributes,
+        previousStatus,
+        newStatus: body.status
       }),
     };
   } catch (err) {
-    console.error(err);
+    console.error("Error updating incident status:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Something went wrong!" }),
+      body: JSON.stringify({ 
+        error: "Something went wrong!",
+        details: err.message 
+      }),
     };
   }
 };

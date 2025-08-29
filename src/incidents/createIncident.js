@@ -98,12 +98,13 @@ exports.handler = async (event) => {
     // Create incident item
     const incidentId = uuidv4();
     const incident = {
-      id: incidentId,
+      incidentId: incidentId,
       userId,
       title: body.title,
       description: body.description,
       status: "pending",
-      severity: body.severity,
+      severity: body.severity || "medium",
+      category: body.category || "general",
       location: body.location,
       createdAt: new Date().toISOString(),
       imageUrls,
@@ -132,17 +133,36 @@ exports.handler = async (event) => {
     //   });
     // }
 
-    // Publish to SNS
+    // Publish to SNS to trigger official notification
     try {
+      const notificationData = {
+        incidentId,
+        userId,
+        title: body.title,
+        category: body.category || "general",
+        severity: body.severity || "medium",
+        timestamp: new Date().toISOString()
+      };
+      
       await sns
         .publish({
           TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
-          Message: JSON.stringify({ incidentId, userId }),
+          Message: JSON.stringify(notificationData),
+          Subject: `New Incident Reported: ${body.title}`,
+          MessageAttributes: {
+            'incident_id': {
+              DataType: 'String',
+              StringValue: incidentId
+            },
+            'category': {
+              DataType: 'String',
+              StringValue: body.category || 'general'
+            }
+          }
         })
         .promise();
     } catch (snsError) {
       console.error("SNS error:", snsError);
-
     }
 
     // Return response

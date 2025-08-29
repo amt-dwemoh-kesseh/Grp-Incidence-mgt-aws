@@ -25,8 +25,8 @@ Globals:
       AllowOrigin: "http://localhost:4200"
 
 Resources:
-
-################################################## Amplify ####################################################
+  
+  ################################################## Amplify ####################################################
   AmplifyRole:
     Type: AWS::IAM::Role
     Properties:
@@ -37,7 +37,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
+              Service:
                 - amplify.amazonaws.com
                 - amplify.eu-central-1.amazonaws.com
             Action: sts:AssumeRole
@@ -190,7 +190,7 @@ Resources:
             - AttributeName: incidentId
               KeyType: RANGE
           Projection:
-            ProjectionType: ALL    
+            ProjectionType: ALL
         - IndexName: ByCityCategoryIndex
           KeySchema:
             - AttributeName: city
@@ -226,9 +226,9 @@ Resources:
       Tags:
         - Key: ProjectTag
           Value: !Ref ProjectTag
-
-
-################################################## Cognito ####################################################
+  
+  
+  ################################################## Cognito ####################################################
 
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -399,7 +399,7 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer      
-       
+  
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
@@ -415,7 +415,7 @@ Resources:
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
-        - python3.12
+        - python3.13
 
   CustomMessagePermission:
     Type: AWS::Lambda::Permission
@@ -424,9 +424,9 @@ Resources:
       FunctionName: !Ref CustomMessageFunction
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt UserPool.Arn
-
-
-################################################## APIs & Functions ##########################################
+  
+  
+  ################################################## APIs & Functions ##########################################
 
   # # API Gateway
   # ApiGateway:
@@ -453,7 +453,7 @@ Resources:
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
@@ -490,7 +490,7 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
@@ -508,7 +508,7 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
@@ -636,7 +636,7 @@ Resources:
             Method: POST
             Auth:
               Authorizer: NONE
-      OptionsEvent:
+        OptionsEvent:
           Type: Api
           Properties:
             Path: /feedback
@@ -663,6 +663,42 @@ Resources:
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
+
+  GetPublicDashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/dashboard/
+      Handler: getPublicDashboard.handler
+      Runtime: nodejs22.x
+      Environment:
+        Variables:
+          QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
+          AWS_ACCOUNT_ID: "GroupOne"
+          AWS_REGION: "eu-west-1"
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - quicksight:GetDashboardEmbedUrl
+                - quicksight:GenerateEmbedUrlForAnonymousUser
+              Resource:
+                - !Sub "arn:aws:quicksight:eu-west-1:GroupOne:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /dashboard
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /dashboard
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket

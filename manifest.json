@@ -1,0 +1,12 @@
+{
+  "fileLocations": [
+    {
+      "URIPrefixes": [
+        "s3://dashboard-data-605134436600/incidents/"
+      ]
+    }
+  ],
+  "globalUploadSettings": {
+    "format": "JSON"
+  }
+}
