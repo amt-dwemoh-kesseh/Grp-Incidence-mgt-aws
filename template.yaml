@@ -22,7 +22,7 @@ Globals:
     Cors:
       AllowMethods: "'GET, POST, OPTIONS, PUT'"
       AllowHeaders: "'Content-Type,Authorization'"
-      AllowOrigin: "'http://localhost:4200, https://dev.d2zgxshg38rb8v.amplifyapp.com'"
+      AllowOrigin: "http://localhost:4200"
 
 Resources:
 
@@ -363,9 +363,16 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /upload-urls
-            Method: post
+            Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /upload-urls
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
@@ -389,9 +396,9 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents
-            Method: post
+            Method: POST
             Auth:
-              Authorizer: CognitoAuthorizer
+              Authorizer: CognitoAuthorizer      
        
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
@@ -549,9 +556,16 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents/mine
-            Method: get
+            Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents/mine
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE 
 
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -600,7 +614,7 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents/{id}/status
-            Method: put
+            Method: PUT
             Auth:
               Authorizer: NONE
   
@@ -619,7 +633,14 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /feedback
-            Method: post
+            Method: POST
+            Auth:
+              Authorizer: NONE
+      OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /feedback
+            Method: OPTIONS
             Auth:
               Authorizer: NONE
   
