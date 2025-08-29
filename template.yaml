@@ -104,7 +104,7 @@ Resources:
       Stage: DEVELOPMENT
 
 
-    # DynamoDB Table for storing incident reports
+  # DynamoDB Table for storing incident reports
   
   
   ################################################## Amplify ####################################################
@@ -683,6 +683,139 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: "status-updated"
+
+  ################################################## Cognito Backup & Restore #####################################
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+
+  CognitoBackupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoBackupFunction
+      Description: Exports Cognito users daily to S3
+      CodeUri: src/backup/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          BUCKET: !Ref BackupBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+
+  BackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 day)
+      Targets:
+        - Arn: !GetAtt CognitoBackupFunction.Arn
+          Id: BackupTarget
+
+  BackupPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CognitoBackupFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BackupSchedule.Arn
+
+  CognitoRestoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoRestoreFunction
+      Description: Restores Cognito users from S3 backup
+      CodeUri: src/restore/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          BUCKET: !Ref BackupBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+
+################################################## Cognito Health Check #####################################
+  CognitoHealthAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Cognito User Pool Health Alerts"
+      TopicName: !Sub "${AWS::StackName}-cognito-health-alerts"
+
+  CognitoHealthAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref CognitoHealthAlertTopic
+      Protocol: email
+      Endpoint: "ehanson787@gmail.com" 
+
+  CognitoHealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoHealthCheckFunction
+      Description: Scheduled health check for Cognito User Pool
+      CodeUri: src/health_check/   
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          ALERT_TOPIC_ARN: !Ref CognitoHealthAlertTopic
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:DescribeUserPool
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref CognitoHealthAlertTopic
+
+  CognitoHealthCheckSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(30 minutes)   
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CognitoHealthCheckFunction.Arn
+          Id: "CognitoHealthCheckTarget"
+
+  CognitoHealthCheckPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CognitoHealthCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CognitoHealthCheckSchedule.Arn
+
 
 
 Outputs:
