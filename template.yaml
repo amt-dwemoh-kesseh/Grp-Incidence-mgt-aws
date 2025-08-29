@@ -8,6 +8,8 @@ Parameters:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
   GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
   Env: { Type: String, Default: dev }
+  PythonRuntime: { Type: String, Default: python3.13 }
+  NodeRuntime: { Type: String, Default: nodejs22.x }
 
 Globals:
   Function:
@@ -22,7 +24,7 @@ Globals:
     Cors:
       AllowMethods: "'GET, POST, OPTIONS, PUT'"
       AllowHeaders: "'Content-Type,Authorization'"
-      AllowOrigin: "'http://localhost:4200'"
+      AllowOrigin: "http://localhost:4200"
 
 Resources:
   
@@ -103,8 +105,7 @@ Resources:
       EnableAutoBuild: true
       Stage: DEVELOPMENT
 
-
-    # DynamoDB Table for storing incident reports
+  # DynamoDB Table for storing incident reports
   
   
   ################################################## Amplify ####################################################
@@ -353,7 +354,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: getUploadUrls.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - S3WritePolicy:
             BucketName: !Ref IncidentAttachmentBucket
@@ -379,7 +380,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: createIncident.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -398,7 +399,7 @@ Resources:
             Path: /incidents
             Method: POST
             Auth:
-              Authorizer: CognitoAuthorizer
+              Authorizer: CognitoAuthorizer      
   
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
@@ -415,7 +416,7 @@ Resources:
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
-        - python3.13
+        - !Ref PythonRuntime
 
   CustomMessagePermission:
     Type: AWS::Lambda::Permission
@@ -453,7 +454,7 @@ Resources:
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
@@ -490,7 +491,7 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
@@ -508,7 +509,7 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
@@ -546,7 +547,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: getMyIncidents.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -565,14 +566,14 @@ Resources:
             Path: /incidents/mine
             Method: OPTIONS
             Auth:
-              Authorizer: NONE
-  
+              Authorizer: NONE 
+
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/incidents/
       Handler: listIncidents.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Environment:
         Variables:
           INCIDENT_TABLE: !Ref IncidentTable
@@ -602,7 +603,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: updateIncidentStatus.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -623,7 +624,7 @@ Resources:
     Properties:
       CodeUri: src/feedback/
       Handler: submitFeedback.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -649,7 +650,7 @@ Resources:
     Properties:
       CodeUri: src/notifications/
       Handler: notifyOfficial.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Environment:
         Variables:
           INCIDENT_TABLE: !Ref IncidentTable
@@ -670,7 +671,7 @@ Resources:
     Properties:
       CodeUri: src/notifications/
       Handler: notifyReporter.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
@@ -685,7 +686,7 @@ Resources:
     Properties:
       CodeUri: src/dashboard/
       Handler: getPublicDashboard.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Environment:
         Variables:
           QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
@@ -735,6 +736,139 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: "status-updated"
+
+  ################################################## Cognito Backup & Restore #####################################
+  BackupBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+
+  CognitoBackupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoBackupFunction
+      Description: Exports Cognito users daily to S3
+      CodeUri: src/backup/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          BUCKET: !Ref BackupBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+
+  BackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 day)
+      Targets:
+        - Arn: !GetAtt CognitoBackupFunction.Arn
+          Id: BackupTarget
+
+  BackupPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CognitoBackupFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BackupSchedule.Arn
+
+  CognitoRestoreFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoRestoreFunction
+      Description: Restores Cognito users from S3 backup
+      CodeUri: src/restore/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          BUCKET: !Ref BackupBucket
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminAddUserToGroup
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+
+################################################## Cognito Health Check #####################################
+  CognitoHealthAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Cognito User Pool Health Alerts"
+      TopicName: !Sub "${AWS::StackName}-cognito-health-alerts"
+
+  CognitoHealthAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref CognitoHealthAlertTopic
+      Protocol: email
+      Endpoint: "ehanson787@gmail.com" 
+
+  CognitoHealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoHealthCheckFunction
+      Description: Scheduled health check for Cognito User Pool
+      CodeUri: src/health_check/   
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          ALERT_TOPIC_ARN: !Ref CognitoHealthAlertTopic
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:DescribeUserPool
+              Resource: !GetAtt UserPool.Arn
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref CognitoHealthAlertTopic
+
+  CognitoHealthCheckSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(30 minutes)   
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CognitoHealthCheckFunction.Arn
+          Id: "CognitoHealthCheckTarget"
+
+  CognitoHealthCheckPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CognitoHealthCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CognitoHealthCheckSchedule.Arn
+
 
 
 Outputs:
