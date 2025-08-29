@@ -215,10 +215,22 @@ sam local start-api --env-vars local-env.json
 
 ## CI/CD
 
-- GitHub Actions workflows are set up in `.github/workflows/`:
-  - `deploy-dev.yml`: Deploys to DEV on push to `dev` branch
-  - `deploy-prod.yml`: Deploys to PROD on push to `main` branch
+- GitHub Actions workflow is set up in `.github/workflows/pipeline.yml`:
 - Ensure your AWS credentials are set as GitHub secrets.
+- The workflow uses two(2) accounts:
+  - dev: For deploying resources from the testing branch
+  - prod: For deploying resources from the main branch
+- The workflow consists of the following jobs:
+  - **delete-feature:** To delete a feature branch
+  - **build-and-deploy-feature:** Triggered for only feature branches (feature*),
+    which will build and deploy to a stack named with branch name.
+  - **build-and-package:** Triggered for only the main branch. Uses the prod and dev accounts to build, upload to s3, and deploy the resources to the respective accounts.
+  - **deploy-testing:** Triggered for only the testing branch. Uses the testing account to deploy the resources.
+  - **deploy-prod:** Triggered for only the main branch. Uses the production account to deploy the resources.
+
+---
+## Amplify Pipeline
+The amplify pipeline to build and deploy frontend changes consists of the following steps:
 
 ---
 

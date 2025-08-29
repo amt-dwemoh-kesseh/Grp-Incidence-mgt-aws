@@ -9,3 +9,5 @@ package-lock.json
 .aws-sam
 .github
 package.json
+.git
+samconfig.toml
