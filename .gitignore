@@ -11,3 +11,4 @@ package-lock.json
 package.json
 .git
 samconfig.toml
+src/package-lock.json

@@ -13,19 +13,6 @@ Globals:
   Function:
     Timeout: 10
     MemorySize: 256
-<<<<<<< HEAD
-    CodeUri: ./src
-    Environment:
-      Variables:
-        INCIDENT_TABLE: !Ref IncidentTable
-        FEEDBACK_TABLE: !Ref FeedbackTable
-        ATTACHMENT_BUCKET: !Ref IncidentAttachmentBucket
-        DASHBOARD_BUCKET: !Ref DashboardDataBucket
-        INCIDENT_REPORTED_TOPIC: !Ref IncidentReportedTopic
-        STATUS_UPDATED_TOPIC: !Ref StatusUpdatedTopic
-        STATUS_WORKFLOW_ARN: !Ref IncidentStatusWorkflow
-        FROM_EMAIL: noreply@monitoring-platform.com
-=======
   Api:
     Auth:
       DefaultAuthorizer: CognitoAuthorizer
@@ -35,12 +22,11 @@ Globals:
     Cors:
       AllowMethods: "'GET, POST, OPTIONS, PUT'"
       AllowHeaders: "'Content-Type,Authorization'"
-      AllowOrigin: "'http://localhost:4200, https://dev.d2zgxshg38rb8v.amplifyapp.com'"
->>>>>>> feature/merge
+      AllowOrigin: "'http://localhost:4200'"
 
 Resources:
-
-################################################## Amplify ####################################################
+  
+  ################################################## Amplify ####################################################
   AmplifyRole:
     Type: AWS::IAM::Role
     Properties:
@@ -51,7 +37,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: 
+              Service:
                 - amplify.amazonaws.com
                 - amplify.eu-central-1.amazonaws.com
             Action: sts:AssumeRole
@@ -204,7 +190,7 @@ Resources:
             - AttributeName: incidentId
               KeyType: RANGE
           Projection:
-            ProjectionType: ALL    
+            ProjectionType: ALL
         - IndexName: ByCityCategoryIndex
           KeySchema:
             - AttributeName: city
@@ -237,196 +223,15 @@ Resources:
         - AttributeName: backupDate
           KeyType: RANGE
 
-<<<<<<< HEAD
-  # S3 Buckets
-  IncidentAttachmentBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "incident-attachments-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-        
-  DashboardDataBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub "dashboard-data-${AWS::AccountId}"
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      BucketPolicy:
-        PolicyDocument:
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service: quicksight.amazonaws.com
-              Action: s3:GetObject
-              Resource: !Sub "arn:aws:s3:::dashboard-data-${AWS::AccountId}/*"
-=======
       Tags:
         - Key: ProjectTag
           Value: !Ref ProjectTag
->>>>>>> feature/merge
-
-
-<<<<<<< HEAD
-  # Step Functions State Machine
-  IncidentStatusWorkflow:
-    Type: AWS::StepFunctions::StateMachine
-    Properties:
-      StateMachineName: IncidentStatusWorkflow
-      DefinitionString: !Sub |
-        {
-          "Comment": "Incident Status Update Workflow with Notifications",
-          "StartAt": "UpdateIncidentStatus",
-          "States": {
-            "UpdateIncidentStatus": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:updateItem",
-              "Parameters": {
-                "TableName": "${IncidentTable}",
-                "Key": {
-                  "id": {
-                    "S.$": "$.incidentId"
-                  }
-                },
-                "UpdateExpression": "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy",
-                "ExpressionAttributeNames": {
-                  "#status": "status"
-                },
-                "ExpressionAttributeValues": {
-                  ":status": {
-                    "S.$": "$.newStatus"
-                  },
-                  ":updatedAt": {
-                    "S.$": "$.timestamp"
-                  },
-                  ":updatedBy": {
-                    "S.$": "$.updatedBy"
-                  }
-                }
-              },
-              "Next": "GetIncidentDetails"
-            },
-            "GetIncidentDetails": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::dynamodb:getItem",
-              "Parameters": {
-                "TableName": "${IncidentTable}",
-                "Key": {
-                  "id": {
-                    "S.$": "$.incidentId"
-                  }
-                }
-              },
-              "Next": "NotifyReporter",
-              "ResultPath": "$.incidentDetails"
-            },
-            "NotifyReporter": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::sns:publish",
-              "Parameters": {
-                "TopicArn": "${StatusUpdatedTopic}",
-                "Message.$": "States.Format('Your incident {} status has been updated to: {}', $.incidentId, $.newStatus)",
-                "Subject.$": "States.Format('Incident Status Updated: {}', $.newStatus)",
-                "MessageAttributes": {
-                  "incidentId": {
-                    "DataType": "String",
-                    "StringValue.$": "$.incidentId"
-                  },
-                  "newStatus": {
-                    "DataType": "String",
-                    "StringValue.$": "$.newStatus"
-                  },
-                  "userEmail": {
-                    "DataType": "String",
-                    "StringValue.$": "$.incidentDetails.Item.userEmail.S"
-                  }
-                }
-              },
-              "Next": "CheckIfClosed"
-            },
-            "CheckIfClosed": {
-              "Type": "Choice",
-              "Choices": [
-                {
-                  "Variable": "$.newStatus",
-                  "StringEquals": "CLOSED",
-                  "Next": "SendClosureNotification"
-                }
-              ],
-              "Default": "Success"
-            },
-            "SendClosureNotification": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::sns:publish",
-              "Parameters": {
-                "TopicArn": "${StatusUpdatedTopic}",
-                "Message": "Your incident has been resolved and closed. Thank you for your report.",
-                "Subject": "Incident Closed - Resolution Complete",
-                "MessageAttributes": {
-                  "incidentId": {
-                    "DataType": "String",
-                    "StringValue.$": "$.incidentId"
-                  },
-                  "userEmail": {
-                    "DataType": "String",
-                    "StringValue.$": "$.incidentDetails.Item.userEmail.S"
-                  },
-                  "notificationType": {
-                    "DataType": "String",
-                    "StringValue": "CLOSURE"
-                  }
-                }
-              },
-              "Next": "Success"
-            },
-            "Success": {
-              "Type": "Succeed"
-            }
-          }
-        }
-      RoleArn: !GetAtt StepFunctionsRole.Arn
-
-  # IAM Role for Step Functions
-  StepFunctionsRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: states.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: StepFunctionsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:UpdateItem
-                  - dynamodb:GetItem
-                Resource: !GetAtt IncidentTable.Arn
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource: !Ref StatusUpdatedTopic
-
-  # API Gateway
-  ApiGateway:
-    Type: AWS::Serverless::Api
-=======
-################################################## Cognito ####################################################
+  
+  
+  ################################################## Cognito ####################################################
 
   UserPool:
     Type: AWS::Cognito::UserPool
->>>>>>> feature/merge
     Properties:
       UserPoolName: IncidentReportingUserPool
       UsernameAttributes:
@@ -558,9 +363,16 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /upload-urls
-            Method: post
+            Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /upload-urls
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
@@ -584,10 +396,10 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents
-            Method: post
+            Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
-       
+  
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
@@ -603,7 +415,7 @@ Resources:
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
-        - python3.12
+        - python3.13
 
   CustomMessagePermission:
     Type: AWS::Lambda::Permission
@@ -612,9 +424,9 @@ Resources:
       FunctionName: !Ref CustomMessageFunction
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt UserPool.Arn
-
-
-################################################## APIs & Functions ##########################################
+  
+  
+  ################################################## APIs & Functions ##########################################
 
   # # API Gateway
   # ApiGateway:
@@ -641,7 +453,7 @@ Resources:
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
@@ -678,7 +490,7 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
@@ -696,7 +508,7 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
-      Runtime: python3.12
+      Runtime: python3.13
       Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
@@ -738,18 +550,23 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
-        - S3ReadPolicy:
-            BucketName: !Ref IncidentAttachmentBucket
       Events:
         Api:
           Type: Api
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents/mine
-            Method: get
+            Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
-
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents/mine
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+  
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -763,8 +580,6 @@ Resources:
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
-        - S3ReadPolicy:
-            BucketName: !Ref IncidentAttachmentBucket
       Events:
         Api:
           Type: Api
@@ -773,9 +588,6 @@ Resources:
             Path: /incidents
             Method: GET
             Auth:
-<<<<<<< HEAD
-              Authorizer: CognitoAuthorizer
-=======
               Authorizer: NONE
         OptionsEvent:
           Type: Api
@@ -785,7 +597,6 @@ Resources:
             Auth:
               Authorizer: NONE
 
->>>>>>> feature/merge
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -797,25 +608,16 @@ Resources:
             TableName: !Ref IncidentTable
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
-        - Statement:
-            - Effect: Allow
-              Action:
-                - states:StartExecution
-              Resource: !Ref IncidentStatusWorkflow
       Events:
         Api:
           Type: Api
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /incidents/{id}/status
-            Method: put
+            Method: PUT
             Auth:
-<<<<<<< HEAD
-              Authorizer: CognitoAuthorizer
-=======
               Authorizer: NONE
   
->>>>>>> feature/merge
   SubmitFeedbackFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -831,7 +633,14 @@ Resources:
           Properties:
             # RestApiId: !Ref ApiGateway
             Path: /feedback
-            Method: post
+            Method: POST
+            Auth:
+              Authorizer: NONE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /feedback
+            Method: OPTIONS
             Auth:
               Authorizer: NONE
   
@@ -854,40 +663,42 @@ Resources:
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
-            
-  EmailNotificationFunction:
+
+  GetPublicDashboardFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: notifications/emailNotificationHandler.handler
+      CodeUri: src/dashboard/
+      Handler: getPublicDashboard.handler
+      Runtime: nodejs22.x
+      Environment:
+        Variables:
+          QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
+          AWS_ACCOUNT_ID: "GroupOne"
+          AWS_REGION: "eu-west-1"
       Policies:
-        - Statement:
+        - Version: '2012-10-17'
+          Statement:
             - Effect: Allow
               Action:
-                - ses:SendEmail
-                - ses:SendRawEmail
-              Resource: "*"
+                - quicksight:GetDashboardEmbedUrl
+                - quicksight:GenerateEmbedUrlForAnonymousUser
+              Resource:
+                - !Sub "arn:aws:quicksight:eu-west-1:GroupOne:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
       Events:
-        StatusUpdatedSNS:
-          Type: SNS
+        Api:
+          Type: Api
           Properties:
-            Topic: !Ref StatusUpdatedTopic
-            
-  ExportDashboardDataFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: dashboard/exportDashboardData.handler
-      Timeout: 60
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref IncidentTable
-        - S3WritePolicy:
-            BucketName: !Ref DashboardDataBucket
-      Events:
-        ScheduledExport:
-          Type: Schedule
+            Path: /dashboard
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        OptionsEvent:
+          Type: Api
           Properties:
-            Schedule: rate(1 hour)
-            Enabled: true
+            Path: /dashboard
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket
@@ -915,23 +726,6 @@ Outputs:
   IncidentTableName:
     Description: The name of the DynamoDB table for incident reports
     Value: !Ref IncidentTable
-<<<<<<< HEAD
-  FeedbackTableName:
-    Description: "Feedback DynamoDB Table Name"
-    Value: !Ref FeedbackTable
-  AttachmentBucketName:
-    Description: "Incident Attachment S3 Bucket Name"
-    Value: !Ref IncidentAttachmentBucket
-  IncidentReportedTopicArn:
-    Description: "Incident Reported SNS Topic ARN"
-    Value: !Ref IncidentReportedTopic
-  StatusUpdatedTopicArn:
-    Description: "Status Updated SNS Topic ARN"
-    Value: !Ref StatusUpdatedTopic
-  DashboardDataBucketName:
-    Description: "Dashboard Data S3 Bucket Name for QuickSight"
-    Value: !Ref DashboardDataBucket
-=======
   UserPoolBackupTableName:
     Description: The name of the DynamoDB table for incident reports
     Value: !Ref UserPoolBackupTable
@@ -958,4 +752,3 @@ Outputs:
   ApiGatewayUrl:
     Description: Base URL for API Gateway
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
->>>>>>> feature/merge
