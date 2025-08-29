@@ -8,6 +8,8 @@ Parameters:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
   GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
   Env: { Type: String, Default: dev }
+  PythonRuntime: { Type: String, Default: python3.13 }
+  NodeRuntime: { Type: String, Default: nodejs22.x }
 
 Globals:
   Function:
@@ -102,7 +104,6 @@ Resources:
       BranchName: dev
       EnableAutoBuild: true
       Stage: DEVELOPMENT
-
 
   # DynamoDB Table for storing incident reports
   
@@ -353,7 +354,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: getUploadUrls.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - S3WritePolicy:
             BucketName: !Ref IncidentAttachmentBucket
@@ -379,7 +380,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: createIncident.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -415,7 +416,7 @@ Resources:
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
-        - python3.13
+        - !Ref PythonRuntime
 
   CustomMessagePermission:
     Type: AWS::Lambda::Permission
@@ -453,7 +454,7 @@ Resources:
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
@@ -490,7 +491,7 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
@@ -508,7 +509,7 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
-      Runtime: python3.13
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
@@ -546,7 +547,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: getMyIncidents.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -572,7 +573,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: listIncidents.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Environment:
         Variables:
           INCIDENT_TABLE: !Ref IncidentTable
@@ -602,7 +603,7 @@ Resources:
     Properties:
       CodeUri: src/incidents/
       Handler: updateIncidentStatus.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -623,7 +624,7 @@ Resources:
     Properties:
       CodeUri: src/feedback/
       Handler: submitFeedback.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -649,7 +650,7 @@ Resources:
     Properties:
       CodeUri: src/notifications/
       Handler: notifyOfficial.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref IncidentReportedTopic
@@ -659,7 +660,7 @@ Resources:
     Properties:
       CodeUri: src/notifications/
       Handler: notifyReporter.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Policies:
         - SNSPublishMessagePolicy:
             TopicName: !Ref StatusUpdatedTopic
@@ -669,7 +670,7 @@ Resources:
     Properties:
       CodeUri: src/dashboard/
       Handler: getPublicDashboard.handler
-      Runtime: nodejs22.x
+      Runtime: !Ref NodeRuntime
       Environment:
         Variables:
           QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
