@@ -694,4 +694,4 @@ Outputs:
 
   ApiGatewayUrl:
     Description: Base URL for API Gateway
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
