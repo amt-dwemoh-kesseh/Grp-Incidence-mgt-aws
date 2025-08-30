@@ -693,8 +693,7 @@ Resources:
           AWS_ACCOUNT_ID: "GroupOne"
           AWS_REGION: "eu-west-1"
       Policies:
-        - PolicyDocument:
-          Version: '2012-10-17'
+        - Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action:
