@@ -8,23 +8,20 @@ Parameters:
     { Type: String, Default: https://github.com/drex7/cmrp-frontend.git }
   GitHubTokenSecret: { Type: String, Default: cmrp-frontend/token }
   Env: { Type: String, Default: dev }
-  PythonRuntime: { Type: String, Default: python3.13 }
+  PythonRuntime: { Type: String, Default: python3.12 }
   NodeRuntime: { Type: String, Default: nodejs22.x }
+  ApiStage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: "API Gateway Stage (dev or prod)"
 
 Globals:
   Function:
     Timeout: 10
     MemorySize: 256
-  Api:
-    Auth:
-      DefaultAuthorizer: CognitoAuthorizer
-      Authorizers:
-        CognitoAuthorizer:
-          UserPoolArn: !GetAtt UserPool.Arn
-    Cors:
-      AllowMethods: "'GET, POST, OPTIONS, PUT'"
-      AllowHeaders: "'Content-Type,Authorization'"
-      AllowOrigin: "http://localhost:4200"
 
 Resources:
   
@@ -362,18 +359,11 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /upload-urls
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /upload-urls
-            Method: OPTIONS
-            Auth:
-              Authorizer: NONE
 
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
@@ -395,7 +385,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /incidents
             Method: POST
             Auth:
@@ -429,25 +419,49 @@ Resources:
   
   ################################################## APIs & Functions ##########################################
 
-  # # API Gateway
-  # ApiGateway:
-  #   Type: AWS::Serverless::Api
-  #   Properties:
-  #     StageName: prod
-  #     BinaryMediaTypes:
-  #       - "multipart/form-data"
-  #       - "image/*"
-  #       - "application/octet-stream"
-  #     # Cors:
-  #     #   AllowMethods: "'OPTIONS,GET,POST,PUT'"
-  #     #   AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
-  #     #   AllowOrigin: "'*'"
-  #     #   AllowCredentials: false
-  #     Auth:
-  #       DefaultAuthorizer: CognitoAuthorizer
-  #       Authorizers:
-  #         CognitoAuthorizer:
-  #           UserPoolArn: !GetAtt UserPool.Arn
+  # API Gateway
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref ApiStage
+      Variables:
+        Stage: !Ref ApiStage
+      # BinaryMediaTypes:
+      #   - "multipart/form-data"
+      #   - "image/*"
+      #   - "application/octet-stream"
+      EndpointConfiguration: 
+        Type: REGIONAL
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt UserPool.Arn
+
+  # CORS Preflight Handler
+  HandleGlobalOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HandleGlobalOptionsFunction
+      Description: Handles CORS preflight requests for API Gateway
+      Runtime: !Ref PythonRuntime
+      CodeUri: src/utils/
+      Handler: handle_global_options.handler
+      Environment:
+        Variables:
+          STAGE: !Ref ApiStage
+          AMPLIFY_DOMAIN: !Sub 
+            - 'https://main.${DefaultDomain}'
+            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
+      Events:
+        OptionsProxy:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            RestApiId: !Ref ApiGateway
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   AdminInviteFunction:
     Type: AWS::Serverless::Function
@@ -475,16 +489,10 @@ Resources:
           Type: Api
           Properties:
             Path: /invite
+            RestApiId: !Ref ApiGateway
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /invite
-            Method: OPTIONS
-            Auth:
-              Authorizer: NONE
 
   CustomMessageFunction:
     Type: AWS::Serverless::Function
@@ -531,16 +539,10 @@ Resources:
           Type: Api
           Properties:
             Path: /users
+            RestApiId: !Ref ApiGateway
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /users
-            Method: OPTIONS
-            Auth:
-              Authorizer: NONE
 
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -555,18 +557,11 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /incidents/mine
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /incidents/mine
-            Method: OPTIONS
-            Auth:
-              Authorizer: NONE 
 
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -585,16 +580,9 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /incidents
             Method: GET
-            Auth:
-              Authorizer: NONE
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /incidents
-            Method: OPTIONS
             Auth:
               Authorizer: NONE
 
@@ -613,7 +601,7 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /incidents/{id}/status
             Method: PUT
             Auth:
@@ -632,16 +620,9 @@ Resources:
         Api:
           Type: Api
           Properties:
-            # RestApiId: !Ref ApiGateway
+            RestApiId: !Ref ApiGateway
             Path: /feedback
             Method: POST
-            Auth:
-              Authorizer: NONE
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /feedback
-            Method: OPTIONS
             Auth:
               Authorizer: NONE
   
@@ -691,30 +672,23 @@ Resources:
         Variables:
           QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
           AWS_ACCOUNT_ID: "GroupOne"
-          AWS_REGION: "eu-west-1"
+          REGION: "eu-west-1"
       Policies:
-        - PolicyDocument:
-          Version: '2012-10-17'
+        - Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action:
                 - quicksight:GetDashboardEmbedUrl
                 - quicksight:GenerateEmbedUrlForAnonymousUser
               Resource:
-                - !Sub "arn:aws:quicksight:eu-west-1:GroupOne:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
+                - !Sub "arn:aws:quicksight:eu-west-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
       Events:
         Api:
           Type: Api
           Properties:
             Path: /dashboard
+            RestApiId: !Ref ApiGateway
             Method: GET
-            Auth:
-              Authorizer: NONE
-        OptionsEvent:
-          Type: Api
-          Properties:
-            Path: /dashboard
-            Method: OPTIONS
             Auth:
               Authorizer: NONE
 
@@ -887,6 +861,11 @@ Outputs:
   AmplifyAppName:
     Description: The name of the deployed Amplify application
     Value: !GetAtt AmplifyApp.AppName
+  AmplifyDomain:
+    Description: The domain of the deployed Amplify application
+    Value: !Sub
+      - 'https://main.${DefaultDomain}'
+      - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
 
   UserPoolId:
     Description: Cognito User Pool ID
@@ -902,4 +881,4 @@ Outputs:
 
   ApiGatewayUrl:
     Description: Base URL for API Gateway
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/dev"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}"
