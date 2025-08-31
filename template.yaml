@@ -314,25 +314,33 @@ Resources:
  
 
 ################################################## Cognito Backup & Restore #####################################
-  BackupBucket:
-    Type: AWS::S3::Bucket
+  CognitoBackupTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      BucketName: !Sub cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+      TableName: !Sub cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "username"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "username"
+          KeyType: "HASH"
+      SSESpecification:
+        SSEEnabled: true
+
 
   CognitoBackupFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: CognitoBackupFunction
-      Description: Exports Cognito users daily to S3
+      Description: Exports Cognito users daily to DynamoDB
       CodeUri: src/backup/
-      Handler: app.lambda_handler
-      Runtime: python3.12
       Timeout: 900
       MemorySize: 256
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
-          BUCKET: !Ref BackupBucket
+          BACKUP_TABLE: !Ref CognitoBackupTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -342,8 +350,10 @@ Resources:
               Resource: !GetAtt UserPool.Arn
             - Effect: Allow
               Action:
-                - s3:PutObject
-              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+                - dynamodb:PutItem
+                - dynamodb:BatchWriteItem
+              Resource: !GetAtt CognitoBackupTable.Arn
+
 
   BackupSchedule:
     Type: AWS::Events::Rule
@@ -365,16 +375,14 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: CognitoRestoreFunction
-      Description: Restores Cognito users from S3 backup
+      Description: Restores Cognito users from DynamoDB backup
       CodeUri: src/restore/
-      Handler: app.lambda_handler
-      Runtime: python3.12
       Timeout: 900
       MemorySize: 256
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
-          BUCKET: !Ref BackupBucket
+          BACKUP_TABLE: !Ref CognitoBackupTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -385,8 +393,10 @@ Resources:
               Resource: !GetAtt UserPool.Arn
             - Effect: Allow
               Action:
-                - s3:GetObject
-              Resource: !Sub arn:aws:s3:::${BackupBucket}/*
+                - dynamodb:Scan
+                - dynamodb:GetItem
+              Resource: !GetAtt CognitoBackupTable.Arn
+
 
 
 ################################################## Cognito Health Check #####################################
