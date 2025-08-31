@@ -22,16 +22,6 @@ Globals:
   Function:
     Timeout: 10
     MemorySize: 256
-  # Api:
-  #   Auth:
-  #     DefaultAuthorizer: CognitoAuthorizer
-  #     Authorizers:
-  #       CognitoAuthorizer:
-  #         UserPoolArn: !GetAtt UserPool.Arn
-  #   Cors:
-  #     AllowMethods: "'GET, POST, OPTIONS, PUT'"
-  #     AllowHeaders: "'Content-Type,Authorization'"
-  #     AllowOrigin: "'http://localhost:4200'"
 
 Resources:
   
@@ -449,21 +439,20 @@ Resources:
             UserPoolArn: !GetAtt UserPool.Arn
 
   # CORS Preflight Handler
-  GlobalOptions:
+  HandleGlobalOptionsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      InlineCode: |
-        def handler(event, context):
-            return {
-              "statusCode": 200,
-              "headers": {
-                "Access-Control-Allow-Origin": "http://localhost:4200",
-                "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key",
-                "Access-Control-Allow-Methods": "OPTIONS,GET,POST,PUT"
-              }
-            }
-      Handler: index.handler
+      FunctionName: HandleGlobalOptionsFunction
+      Description: Handles CORS preflight requests for API Gateway
       Runtime: !Ref PythonRuntime
+      CodeUri: src/utils/
+      Handler: handle_global_options.handler
+      Environment:
+        Variables:
+          STAGE: !Ref ApiStage
+          AMPLIFY_DOMAIN: !Sub 
+            - 'https://main.${DefaultDomain}'
+            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
       Events:
         OptionsProxy:
           Type: Api
@@ -872,6 +861,11 @@ Outputs:
   AmplifyAppName:
     Description: The name of the deployed Amplify application
     Value: !GetAtt AmplifyApp.AppName
+  AmplifyDomain:
+    Description: The domain of the deployed Amplify application
+    Value: !Sub
+      - 'https://main.${DefaultDomain}'
+      - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
 
   UserPoolId:
     Description: Cognito User Pool ID
