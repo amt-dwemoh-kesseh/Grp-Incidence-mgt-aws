@@ -750,6 +750,8 @@ Resources:
     Properties:
       FunctionName: CognitoBackupFunction
       Description: Exports Cognito users daily to DynamoDB
+      Runtime: !Ref PythonRuntime
+      Handler: app.lambda_handler
       CodeUri: src/backup/
       Timeout: 900
       MemorySize: 256
@@ -774,7 +776,7 @@ Resources:
   BackupSchedule:
     Type: AWS::Events::Rule
     Properties:
-      ScheduleExpression: rate(1 day)
+      ScheduleExpression: rate(1 hour)
       Targets:
         - Arn: !GetAtt CognitoBackupFunction.Arn
           Id: BackupTarget
@@ -792,6 +794,8 @@ Resources:
     Properties:
       FunctionName: CognitoRestoreFunction
       Description: Restores Cognito users from DynamoDB backup
+      Runtime: !Ref PythonRuntime
+      Handler: app.lambda_handler
       CodeUri: src/restore/
       Timeout: 900
       MemorySize: 256
@@ -832,9 +836,9 @@ Resources:
     Properties:
       FunctionName: CognitoHealthCheckFunction
       Description: Scheduled health check for Cognito User Pool
-      CodeUri: src/health_check/   
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
-      Runtime: python3.12
+      CodeUri: src/health_check/
       Timeout: 30
       MemorySize: 128
       Environment:
