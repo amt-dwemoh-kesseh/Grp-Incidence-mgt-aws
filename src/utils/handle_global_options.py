@@ -11,14 +11,14 @@ ALLOWED_ORIGINS = [
 
 def handler(event, context):
 
-	referer = event['headers'].get('Referer')
+	origin = event['headers'].get('origin')
 	print(f"HEADERS: {event['headers']}")
-	print(f"Received OPTIONS request from referer: {referer}")
-	if referer in ALLOWED_ORIGINS:
+	print(f"Received OPTIONS request from origin: {origin}")
+	if origin in ALLOWED_ORIGINS:
 		return {
 			"statusCode": 200,
 			"headers": {
-				"Access-Control-Allow-Origin": referer,
+				"Access-Control-Allow-Origin": origin,
 				"Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date",
 				"Access-Control-Allow-Methods": "OPTIONS,GET,POST,PUT"
 			}
