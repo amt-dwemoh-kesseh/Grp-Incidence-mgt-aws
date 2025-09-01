@@ -371,6 +371,10 @@ Resources:
       CodeUri: src/incidents/
       Handler: createIncident.handler
       Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -389,7 +393,21 @@ Resources:
             Path: /incidents
             Method: POST
             Auth:
-              Authorizer: CognitoAuthorizer      
+              Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: OPTIONS
+            Auth:
+              Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: OPTIONS
+            Auth:
+              Authorizer: CognitoAuthorizer
   
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
@@ -550,6 +568,10 @@ Resources:
       CodeUri: src/incidents/
       Handler: getMyIncidents.handler
       Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
@@ -562,6 +584,13 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents/mine
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE 
 
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -585,6 +614,13 @@ Resources:
             Method: GET
             Auth:
               Authorizer: NONE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
@@ -592,6 +628,10 @@ Resources:
       CodeUri: src/incidents/
       Handler: updateIncidentStatus.handler
       Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -604,6 +644,13 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /incidents/{id}/status
             Method: PUT
+            Auth:
+              Authorizer: NONE
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents/{id}/status
+            Method: OPTIONS
             Auth:
               Authorizer: NONE
   
