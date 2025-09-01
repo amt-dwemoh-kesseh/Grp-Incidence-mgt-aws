@@ -1,94 +1,119 @@
 const { v4: uuidv4 } = require("uuid");
-const AWS = require("aws-sdk");
-const path = require("path");
+const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
+
+const ALLOWED_ORIGINS = [
+  "http://localhost:4200",
+  "https://dev.d2zgxshg38rb8v.amplifyapp.com",
+];
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": ALLOWED_ORIGINS.join(", "),
+  "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
+};
+
+// Initialize SDK clients inside handler to avoid cold-start timeout issues
 
 exports.handler = async (event) => {
-  console.log("Function started");
-  
   try {
-    // Initialize AWS services inside the handler (lazy initialization)
-    const dynamo = new AWS.DynamoDB.DocumentClient();
-    // const s3 = new AWS.S3();
-    const sns = new AWS.SNS();
-    
-        
-    // Extract user ID from Cognito JWT token
-    
-    let cognitoUserId = "98999993-UUID-4d3c-8b2f-123456789012"; // Default for local testing
-    let userEmail = "3samkus@gmail.com";
-    
-    // Try to get from authorizer context (production)
-    // if (event.requestContext?.authorizer?.claims) {
-    //   cognitoUserId = event.requestContext.authorizer.claims.sub;
-    //   userEmail = event.requestContext.authorizer.claims.email;
-      
-    // } 
-    // // Fallback: decode JWT from Authorization header (local development)
-    // else if (event.headers?.Authorization || event.headers?.authorization) {
-    //   const authHeader = event.headers.Authorization || event.headers.authorization;
-    //   const token = authHeader.replace('Bearer ', '');
-      
-    //   try {
-    //     // Decode JWT payload (base64 decode the middle part)
-    //     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-       
-    //     cognitoUserId = payload.sub;
-    //     userEmail = payload.email;
-        
-    //   } catch (error) {
-        
-    //     return {
-    //       statusCode: 401,
-    //       body: JSON.stringify({ error: "Invalid JWT token" }),
-    //     };
-    //   }
-    // }
-    
-    // if (!cognitoUserId) {
-    //   return {
-    //     statusCode: 401,
-    //     body: JSON.stringify({ error: "Unauthorized - missing user context" }),
-    //   };
-    // }
-    
-    
+    // Handle preflight CORS
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 200,
+        headers: CORS_HEADERS,
+        body: "",
+      };
+    }
+
+    const dynamo = new DynamoDBClient({
+      region: process.env.AWS_REGION || "eu-central-1",
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 5000,
+        socketTimeout: 5000,
+      }),
+    });
+
+    const sns = new SNSClient({
+      region: process.env.AWS_REGION || "eu-central-1",
+      requestHandler: new NodeHttpHandler({
+        connectionTimeout: 5000,
+        socketTimeout: 5000,
+      }),
+    });
+
+    // Extract user ID (default for local testing)
+    let cognitoUserId;
+    let userEmail;
+
+    // TODO: Add JWT decode or authorizer claims if needed
+    if (event.requestContext?.authorizer?.claims) {
+      cognitoUserId = event.requestContext.authorizer.claims.sub;
+      userEmail = event.requestContext.authorizer.claims.email;
+    }
+    // Fallback: decode JWT from Authorization header (local development)
+    else if (event.headers?.Authorization || event.headers?.authorization) {
+      const authHeader =
+        event.headers.Authorization || event.headers.authorization;
+      const token = authHeader.replace("Bearer ", "");
+
+      try {
+        // Decode JWT payload (base64 decode the middle part)
+        const payload = JSON.parse(
+          Buffer.from(token.split(".")[1], "base64").toString()
+        );
+
+        cognitoUserId = payload.sub;
+        userEmail = payload.email;
+      } catch (error) {
+        return {
+          statusCode: 401,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({ error: "Invalid JWT token" }),
+        };
+      }
+    }
+
+    if (!cognitoUserId) {
+      return {
+        statusCode: 401,
+        headers: CORS_HEADERS,
+        body: JSON.stringify({ error: "Unauthorized - missing user context" }),
+      };
+    }
 
     // Parse and validate input
     const body = JSON.parse(event.body);
-    console.log("Parsed body:", body);
-    
+
     if (!body.title || !body.description) {
       return {
         statusCode: 400,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ error: "Missing required fields" }),
       };
     }
 
-    // Use authenticated user ID
     const userId = cognitoUserId;
 
-
+    // Validate image URLs if provided
     let imageUrls = [];
-    
-    if (body.imageUrls && Array.isArray(body.imageUrls) && body.imageUrls.length > 0) {
-      // Validate image URLs
+    if (body.imageUrls && Array.isArray(body.imageUrls)) {
       for (const imageUrl of body.imageUrls) {
-        if (!imageUrl || typeof imageUrl !== 'string') {
+        if (typeof imageUrl !== "string") {
           return {
             statusCode: 400,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Invalid image URL provided" }),
           };
         }
-        
-        // Basic URL validation
         try {
-          console.log("Validating image URL:", imageUrl);
-          new URL(imageUrl);
+          new URL(imageUrl); // basic URL validation
           imageUrls.push(imageUrl);
-          console.log("Image URL is valid:", imageUrl);
-        } catch (error) {
+        } catch {
           return {
             statusCode: 400,
+            headers: CORS_HEADERS,
             body: JSON.stringify({ error: "Invalid image URL format" }),
           };
         }
@@ -97,77 +122,68 @@ exports.handler = async (event) => {
 
     // Create incident item
     const incidentId = uuidv4();
+
     const incident = {
-      incidentId: incidentId,
-      userId,
-      title: body.title,
-      description: body.description,
-      status: "pending",
-      severity: body.severity || "medium",
-      category: body.category || "general",
-      location: body.location,
-      createdAt: new Date().toISOString(),
-      imageUrls,
+      id: { S: incidentId },
+      userId: { S: userId },
+      title: { S: body.title },
+      description: { S: body.description },
+      status: { S: "pending" },
+      severity: { S: body.severity || "medium" },
+      category: { S: body.category || "general" },
+      location: body.location ? { S: body.location } : { NULL: true },
+      createdAt: { S: new Date().toISOString() },
+      imageUrls: { L: imageUrls.map((url) => ({ S: url })) },
     };
-    
 
     // Save to DynamoDB
-    try {
-      await dynamo
-        .put({
-          TableName: process.env.INCIDENT_TABLE,
-          Item: incident,
-        })
-        .promise();
-    } catch (dbError) {
-      throw dbError;
+    
+    if (!process.env.INCIDENT_TABLE) {
+      throw new Error("INCIDENT_TABLE environment variable not set");
     }
+    await dynamo.send(
+      new PutItemCommand({
+        TableName: process.env.INCIDENT_TABLE,
+        Item: incident,
+      })
+    );
 
-    // Generate S3 pre-signed URL for attachment (optional)
-    // let uploadUrl;
-    // if (body.attachmentFilename) {
-    //   uploadUrl = s3.getSignedUrl("putObject", {
-    //     Bucket: process.env.ATTACHMENT_BUCKET,
-    //     Key: `incidents/${incidentId}/${body.attachmentFilename}`,
-    //     Expires: 300,
-    //   });
-    // }
-
-    // Publish to SNS to trigger official notification
-    try {
+    // Publish notification to SNS
+    if (process.env.INCIDENT_REPORTED_TOPIC) {
       const notificationData = {
         incidentId,
         userId,
         title: body.title,
         category: body.category || "general",
         severity: body.severity || "medium",
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
-      
-      await sns
-        .publish({
-          TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
-          Message: JSON.stringify(notificationData),
-          Subject: `New Incident Reported: ${body.title}`,
-          MessageAttributes: {
-            'incident_id': {
-              DataType: 'String',
-              StringValue: incidentId
+
+      try {
+        await sns.send(
+          new PublishCommand({
+            TopicArn: process.env.INCIDENT_REPORTED_TOPIC,
+            Message: JSON.stringify(notificationData),
+            Subject: `New Incident Reported: ${body.title}`,
+            MessageAttributes: {
+              incident_id: { DataType: "String", StringValue: incidentId },
+              category: {
+                DataType: "String",
+                StringValue: body.category || "general",
+              },
             },
-            'category': {
-              DataType: 'String',
-              StringValue: body.category || 'general'
-            }
-          }
-        })
-        .promise();
-    } catch (snsError) {
-      console.error("SNS error:", snsError);
+          })
+        );
+      } catch (snsError) {
+        console.error("SNS error:", snsError);
+      }
+    } else {
+      console.warn("INCIDENT_REPORTED_TOPIC not set, skipping SNS publish");
     }
 
-    // Return response
     return {
       statusCode: 201,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         message: "Incident created",
         incidentId,
@@ -183,16 +199,20 @@ exports.handler = async (event) => {
     if (error instanceof SyntaxError && error.message.includes("JSON")) {
       statusCode = 400;
       errorMessage = "Invalid JSON in request body.";
-    } else if (error.message.includes("TableName") || error.message.includes("Bucket") || error.message.includes("TopicArn")) {
-      // This is a generic check, more specific checks could be added if needed
+    } else if (
+      error.message.includes("TableName") ||
+      error.message.includes("Bucket") ||
+      error.message.includes("TopicArn")
+    ) {
       errorMessage = `Configuration error: ${error.message}`;
     }
 
     return {
-      statusCode: statusCode,
+      statusCode,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         error: errorMessage,
-        details: error.message, // Include error message for debugging
+        details: error.message,
       }),
     };
   }

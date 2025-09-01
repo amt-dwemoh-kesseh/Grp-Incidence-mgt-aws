@@ -380,6 +380,10 @@ Resources:
       CodeUri: src/incidents/
       Handler: createIncident.handler
       Runtime: nodejs22.x
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
@@ -399,6 +403,13 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        OptionsEvent:
+          Type: Api
+          Properties:
+            Path: /incidents
+            Method: OPTIONS
+            Auth:
+              Authorizer: CognitoAuthorizer
   
   IdentityPoolRoleAttachment:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
@@ -415,7 +426,7 @@ Resources:
       Description: Shared authorization utilities for admin-only Lambdas
       ContentUri: src/layers/auth_utils/
       CompatibleRuntimes:
-        - python3.13
+        - python3.12
 
   CustomMessagePermission:
     Type: AWS::Lambda::Permission
@@ -453,7 +464,7 @@ Resources:
     Properties:
       FunctionName: AdminInviteUserFunction
       Description: Allows Admins to invite new Admins or City Officials
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: app.lambda_handler
       CodeUri: src/admin_invite/
       Environment:
@@ -490,7 +501,7 @@ Resources:
     Properties:
       FunctionName: CognitoCustomMessageFunction
       Description: Customizes Cognito emails for invites and password resets
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: app.lambda_handler
       CodeUri: src/custom_message/
       Policies:
@@ -508,7 +519,7 @@ Resources:
     Properties:
       FunctionName: ListUserStatsFunction
       Description: Lists user counts by group and returns all users
-      Runtime: python3.13
+      Runtime: python3.12
       Handler: app.lambda_handler
       CodeUri: src/list_users/
       Environment:
@@ -547,6 +558,10 @@ Resources:
       CodeUri: src/incidents/
       Handler: getMyIncidents.handler
       Runtime: nodejs22.x
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          ENV: !Ref Env
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
