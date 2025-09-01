@@ -1,8 +1,4 @@
 {
   "name": "lambda-functions",
-  "version": "1.0.0",
-  "dependencies": {
-    "aws-sdk": "^2.1485.0",
-    "uuid": "^9.0.0"
-  }
+  "version": "1.0.0"
 }
