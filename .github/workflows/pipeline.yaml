@@ -81,7 +81,7 @@ jobs:
       - uses: aws-actions/setup-sam@v2
         with:
           use-installer: true
-      - run: sam build --template ${SAM_TEMPLATE} --use-container
+      - run: sam build --template ${SAM_TEMPLATE} --use-container --clean
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
@@ -113,7 +113,7 @@ jobs:
           use-installer: true
 
       - name: Build resources
-        run: sam build --template ${SAM_TEMPLATE} --use-container
+        run: sam build --template ${SAM_TEMPLATE} --use-container --clean
 
       - name: Assume the testing pipeline user role
         uses: aws-actions/configure-aws-credentials@v4
@@ -187,6 +187,7 @@ jobs:
             --region ${TESTING_REGION} \
             --s3-bucket ${TESTING_ARTIFACTS_BUCKET} \
             --no-fail-on-empty-changeset \
+             --disable-rollback \
             --role-arn ${TESTING_CLOUDFORMATION_EXECUTION_ROLE}
 
   integration-test:
