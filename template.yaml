@@ -120,7 +120,7 @@ Resources:
         RecoveryPeriodInDays: 35
 
       AttributeDefinitions:
-        - AttributeName: incidentId
+        - AttributeName: id
           AttributeType: S
         - AttributeName: category
           AttributeType: S
