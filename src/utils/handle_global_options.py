@@ -1,17 +1,19 @@
 import os
 
-
-AMPLIFY_DOMAIN = os.environ["AMPLIFY_DOMAIN"]
+AMPLIFY_PROD_DOMAIN = os.environ["AMPLIFY_PROD_DOMAIN"]
+AMPLIFY_DEV_DOMAIN = os.environ["AMPLIFY_DEV_DOMAIN"]
 
 ALLOWED_ORIGINS = [
-	"http://localhost:4200",
-	"https://your-production-domain.com",
-	AMPLIFY_DOMAIN
+	"http://localhost:4200/",
+	AMPLIFY_DEV_DOMAIN,
+	AMPLIFY_PROD_DOMAIN
 ] 
 
 def handler(event, context):
-	
-	origin = event['headers'].get('Origin')
+
+	origin = event['headers'].get('origin')
+	print(f"HEADERS: {event['headers']}")
+	print(f"Received OPTIONS request from origin: {origin}")
 	if origin in ALLOWED_ORIGINS:
 		return {
 			"statusCode": 200,
