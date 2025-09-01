@@ -457,11 +457,11 @@ Resources:
           AMPLIFY_DEV_DOMAIN: !Sub 
             - 'https://${DevBranch}.${DefaultDomain}/'
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
-            - DevBranch: !GetAtt DevBranch.BranchName
+              DevBranch: !GetAtt DevBranch.BranchName
           AMPLIFY_PROD_DOMAIN: !Sub 
             - 'https://${MainBranch}.${DefaultDomain}/'
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
-            - MainBranch: !GetAtt MainBranch.BranchName
+              MainBranch: !GetAtt MainBranch.BranchName
       Events:
         OptionsProxy:
           Type: Api
