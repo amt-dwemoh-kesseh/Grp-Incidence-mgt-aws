@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     let client_origin = event.headers.Origin || event.headers.origin;
     console.log("Client origin:", client_origin);
 
-    
+
     const UPDATED_SET_HEADERS = {
       ...CORS_HEADERS,
       "Access-Control-Allow-Origin": client_origin,
@@ -127,7 +127,7 @@ exports.handler = async (event) => {
     const incidentId = uuidv4();
 
     const incident = {
-      id: { S: incidentId },
+      incidentId: { S: incidentId },
       userId: { S: userId },
       title: { S: body.title },
       description: { S: body.description },
