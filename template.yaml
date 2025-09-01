@@ -137,7 +137,7 @@ Resources:
         - AttributeName: severity
           AttributeType: S
       KeySchema:
-        - AttributeName: incidentId
+        - AttributeName: id
           KeyType: HASH
 
       GlobalSecondaryIndexes:
@@ -145,7 +145,7 @@ Resources:
           KeySchema:
             - AttributeName: status
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -153,7 +153,7 @@ Resources:
           KeySchema:
             - AttributeName: severity
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -161,7 +161,7 @@ Resources:
           KeySchema:
             - AttributeName: category
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -169,7 +169,7 @@ Resources:
           KeySchema:
             - AttributeName: reportedBy
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -177,7 +177,7 @@ Resources:
           KeySchema:
             - AttributeName: assignedTo
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
@@ -185,7 +185,7 @@ Resources:
           KeySchema:
             - AttributeName: region
               KeyType: HASH
-            - AttributeName: incidentId
+            - AttributeName: id
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
