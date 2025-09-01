@@ -13,8 +13,8 @@ USER_POOL_ID = os.environ["USER_POOL_ID"]
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+
 CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "http://localhost:4200",
     "Access-Control-Allow-Methods": "OPTIONS,POST",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
     }
@@ -22,12 +22,8 @@ CORS_HEADERS = {
 def lambda_handler(event, context):
     logger.info(f"Received event: {json.dumps(event)}")
     
-    if event['httpMethod'] == 'OPTIONS':
-        return {
-            "statusCode": 200,
-            "headers": CORS_HEADERS,
-            "body": ""
-        }
+    origin = event['headers'].get('origin')
+    CORS_HEADERS.update({"Access-Control-Allow-Origin": origin})
         
     if not is_admin(event):
         logger.warning("Unauthorized access attempt by non-admin user")
