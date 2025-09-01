@@ -10,6 +10,12 @@ logger.setLevel(logging.INFO)
 cognito = boto3.client("cognito-idp")
 USER_POOL_ID = os.environ["USER_POOL_ID"]
 
+CORS_HEADERS = {
+    "Access-Control-Allow-Methods": "OPTIONS,POST",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+}
+
+
 def get_users_in_group(group_name):
     users = set()
     paginator = cognito.get_paginator("list_users_in_group")
@@ -19,13 +25,17 @@ def get_users_in_group(group_name):
 
 
 def lambda_handler(event, context):
+    
+    origin = event['headers'].get('origin')
+    CORS_HEADERS.update({"Access-Control-Allow-Origin": origin})
 
     if not is_admin(event):
         logger.warning("Unauthorized access attempt")
-        return {"statusCode": 403,"body": json.dumps({"message": "Forbidden: Admins only"})}
+        return {"statusCode": 403, "headers": CORS_HEADERS, "body": json.dumps({"message": "Forbidden: Admins only"})}
 
     try:
-        # Fetch all users once
+        logger.info("Fetching all users from Cognito User Pool")
+        
         all_users = []
         paginator = cognito.get_paginator("list_users")
         for page in paginator.paginate(UserPoolId=USER_POOL_ID):
@@ -73,9 +83,9 @@ def lambda_handler(event, context):
         }
         logger.info(("Successfully retrieved user data"))
 
-        return {"statusCode": 200, "body": json.dumps(response_body)}
+        return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps(response_body)}
 
     except Exception as e:
         logger.error(f"Error: {str(e)}")
         
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps({"error": str(e)})}
