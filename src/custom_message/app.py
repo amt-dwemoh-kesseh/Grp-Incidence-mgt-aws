@@ -1,4 +1,5 @@
 import logging
+import urllib.parse
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -41,8 +42,13 @@ def lambda_handler(event, context):
         
         event["response"]["emailSubject"] = f"Welcome to {brand_name}!"
         code = event['request']['codeParameter']
-        
-        verify_link = f"http://localhost:4200/verify-otp?otp={event['request']['codeParameter']}"
+        encoded_email = urllib.parse.quote(user_email)
+
+        verify_link = (
+                f"http://localhost:4200/verify-otp?"
+                f"otp={event['request']['codeParameter']}&email={encoded_email}"
+            )
+
         
         message = (
                 f"Hi {name},<br><br>"
@@ -69,15 +75,42 @@ def lambda_handler(event, context):
 
     elif trigger == "CustomMessage_AdminCreateUser":
         logger.info(f"CustomMessage_AdminCreateUser triggered for {user_email}")
-        
-        event["response"]["emailSubject"] = f"You’ve been invited to {brand_name}"
-        event["response"]["emailMessage"] = build_html_email(
-            title="Your Account Invitation",
-            message="Hello,<br><br>You have been invited to our Incident Reporting system. "
-                    "Use the temporary password below to log in and set a new password:",
-            code=event['request']['codeParameter']
-        )
 
+        temp_password = event['request']['codeParameter']
+
+        reset_link = (
+                f"http://localhost:4200/reset-password?"
+                f"tempPassword={urllib.parse.quote(temp_password)}&email={urllib.parse.quote(user_email)}"
+            )
+
+        event["response"]["emailSubject"] = f"Welcome to {brand_name} 🎉"
+
+        event["response"]["emailMessage"] = f"""
+            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+                <h2 style="color: {brand_color};">👋 Welcome to {brand_name}!</h2>
+                <p>Hi <b>{name}</b>,</p>
+                <p>Your account has been created successfully. Here are your credentials:</p>
+
+                <div style="padding: 10px; background: #f4f4f4; border-radius: 8px; margin: 15px 0;">
+                    <p><b>Email:</b> {user_email}</p>
+                    <p><b>Temporary Password:</b> {temp_password}</p>
+                </div>
+
+                <p>To activate your account, please reset your password using the link below:</p>
+                <p>
+                    <a href="{reset_link}" 
+                    style="display:inline-block; background:{brand_color}; color:#fff; 
+                            padding:10px 20px; border-radius:5px; text-decoration:none; font-weight:bold;">
+                        🔑 Reset My Password
+                    </a>
+                </p>
+
+                <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+                <p style="font-size: 14px; color: #555;">{reset_link}</p>
+
+                <p>Cheers,<br>{brand_name} Team 🚀</p>
+            </div>
+            """
     elif trigger == "CustomMessage_ForgotPassword":
         logger.info(f"CustomMessage_ForgotPassword triggered for {user_email}")
         

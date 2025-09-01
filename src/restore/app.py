@@ -1,69 +1,76 @@
-import boto3
-import json
-import os
-import logging
-from datetime import datetime, timezone
+import boto3, os, logging, secrets, string
+from botocore.exceptions import ClientError
 
-# Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-s3 = boto3.client("s3")
 cognito = boto3.client("cognito-idp")
+dynamodb = boto3.resource("dynamodb")
 
 USER_POOL_ID = os.environ["USER_POOL_ID"]
-BUCKET = os.environ["BUCKET"]
+BACKUP_TABLE = os.environ["BACKUP_TABLE"]
+table = dynamodb.Table(BACKUP_TABLE)
+
+
+def generate_temp_password(length=16):
+    """Generate a strong random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()-_=+"
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
 
 def lambda_handler(event, context):
-    # File key should be passed in event (e.g. {"file": "POOLID_backup_2025-08-28T12:34:56+00:00.json"})
-    key = event.get("file")
-    if not key:
-        logger.error("❌ No backup file specified in event")
-        return {"status": "error", "message": "No backup file specified"}
-
-    logger.info(f"📂 Fetching backup file '{key}' from bucket '{BUCKET}'")
-
-    # Fetch the backup file from S3
-    obj = s3.get_object(Bucket=BUCKET, Key=key)
-    users = json.loads(obj["Body"].read())
-
-    restored = []
-    errors = []
-
-    for user in users:
-        username = user.get("Username")
-        try:
-            # Extract attributes into Cognito API format
+    """Restore Cognito users from DynamoDB backup."""
+    try:
+        response = table.scan()
+        for item in response.get("Items", []):
+            username = item["username"]
             attributes = [
-                {"Name": attr["Name"], "Value": attr["Value"]}
-                for attr in user.get("Attributes", [])
-                if "Value" in attr
+                {"Name": k, "Value": v} for k, v in item.get("attributes", {}).items()
             ]
+            groups = item.get("groups", [])
+            enabled = item.get("enabled", True)
 
-            logger.info(f"🔄 Restoring user: {username}")
+            try:
+                # create user
+                cognito.admin_create_user(
+                    UserPoolId=USER_POOL_ID,
+                    Username=username,
+                    UserAttributes=attributes,
+                    TemporaryPassword=generate_temp_password(),
+                    MessageAction="SUPPRESS",  # don't send invitation email
+                )
 
-            cognito.admin_create_user(
-                UserPoolId=USER_POOL_ID,
-                Username=username,
-                UserAttributes=attributes,
-                MessageAction="SUPPRESS"  # No email triggered
-            )
+                # reset password to force user update on login
+                cognito.admin_set_user_password(
+                    UserPoolId=USER_POOL_ID,
+                    Username=username,
+                    Password=generate_temp_password(),
+                    Permanent=False  # force reset on next login
+                )
 
-            logger.info(f"✅ Successfully restored user: {username}")
-            restored.append(username)
+                # restore enabled/disabled state
+                if not enabled:
+                    cognito.admin_disable_user(
+                        UserPoolId=USER_POOL_ID, Username=username
+                    )
 
-        except Exception as e:
-            logger.error(f"❌ Failed to restore user {username}: {str(e)}")
-            errors.append({"username": username, "error": str(e)})
+                # restore groups
+                for group in groups:
+                    cognito.admin_add_user_to_group(
+                        UserPoolId=USER_POOL_ID,
+                        Username=username,
+                        GroupName=group,
+                    )
 
-    now = datetime.now(timezone.utc)
+                logger.info(f"✅ Restored user {username}")
 
-    summary = {
-        "status": "completed",
-        "restored_count": len(restored),
-        "failed_count": len(errors),
-        "restore_time": now.isoformat()
-    }
+            except cognito.exceptions.UsernameExistsException:
+                logger.info(f"ℹ️ User already exists: {username}")
+                continue
 
-    logger.info(f"📊 Restore summary: {json.dumps(summary)}")
-    return {**summary, "errors": errors}
+        logger.info("🎉 Restore completed successfully")
+        return {"status": "SUCCESS"}
+
+    except ClientError as e:
+        logger.error(f"❌ Restore failed: {str(e)}")
+        return {"status": "ERROR", "details": str(e)}
