@@ -1,22 +1,25 @@
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-const { DynamoDBDocumentClient, ScanCommand } = require("@aws-sdk/lib-dynamodb");
+const {
+  DynamoDBDocumentClient,
+  ScanCommand,
+} = require("@aws-sdk/lib-dynamodb");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
 
-const ALLOWED_ORIGINS = [
-  "http://localhost:4200",
-  "https://dev.d2zgxshg38rb8v.amplifyapp.com",
-];
-
 const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGINS.join(", "),
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
 exports.handler = async (event) => {
   try {
+     let client_origin = event.headers.Origin || event.headers.origin;
+
+    const UPDATED_SET_HEADERS = {
+      ...CORS_HEADERS,
+      "Access-Control-Allow-Origin": client_origin,
+    };
     // DynamoDB DocumentClient (auto-marshals JS <-> DynamoDB)
     const dynamo = DynamoDBDocumentClient.from(
       new DynamoDBClient({
@@ -28,7 +31,9 @@ exports.handler = async (event) => {
       })
     );
 
-    const s3 = new S3Client({ region: process.env.AWS_REGION || "eu-central-1" });
+    const s3 = new S3Client({
+      region: process.env.AWS_REGION || "eu-central-1",
+    });
 
     // Handle preflight CORS
     if (event.httpMethod === "OPTIONS") {
@@ -43,22 +48,32 @@ exports.handler = async (event) => {
     if (event.requestContext?.authorizer?.claims) {
       cognitoUserId = event.requestContext.authorizer.claims.sub;
       userEmail = event.requestContext.authorizer.claims.email;
-      userGroups = event.requestContext.authorizer.claims["cognito:groups"] || [];
+      userGroups =
+        event.requestContext.authorizer.claims["cognito:groups"] || [];
     } else if (event.headers?.Authorization || event.headers?.authorization) {
-      const authHeader = event.headers.Authorization || event.headers.authorization;
+      const authHeader =
+        event.headers.Authorization || event.headers.authorization;
       const token = authHeader.replace("Bearer ", "");
       try {
-        const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64").toString());
+        const payload = JSON.parse(
+          Buffer.from(token.split(".")[1], "base64").toString()
+        );
         cognitoUserId = payload.sub;
         userEmail = payload.email;
         userGroups = payload["cognito:groups"] || [];
       } catch {
-        return { statusCode: 401, body: JSON.stringify({ error: "Invalid JWT token" }) };
+        return {
+          statusCode: 401,
+          body: JSON.stringify({ error: "Invalid JWT token" }),
+        };
       }
     }
 
     if (!cognitoUserId) {
-      return { statusCode: 401, body: JSON.stringify({ error: "Unauthorized - missing user context" }) };
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: "Unauthorized - missing user context" }),
+      };
     }
 
     // --- Build scan params ---
@@ -98,7 +113,10 @@ exports.handler = async (event) => {
           incident.attachments.map(async (att) => {
             const url = await getSignedUrl(
               s3,
-              new GetObjectCommand({ Bucket: process.env.ATTACHMENT_BUCKET, Key: att.key }),
+              new GetObjectCommand({
+                Bucket: process.env.ATTACHMENT_BUCKET,
+                Key: att.key,
+              }),
               { expiresIn: 3600 }
             );
             return { ...att, downloadUrl: url };
@@ -125,7 +143,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: CORS_HEADERS,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({
         incidents,
         count: incidents.length,
@@ -138,8 +156,11 @@ exports.handler = async (event) => {
     console.error("Error retrieving user incidents:", err);
     return {
       statusCode: 500,
-      headers: CORS_HEADERS,
-      body: JSON.stringify({ error: "Something went wrong!", details: err.message }),
+      headers: UPDATED_SET_HEADERS,
+      body: JSON.stringify({
+        error: "Something went wrong!",
+        details: err.message,
+      }),
     };
   }
 };

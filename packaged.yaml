@@ -420,6 +420,8 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+<<<<<<< HEAD
+=======
         OptionsEvent:
           Type: Api
           Properties:
@@ -427,6 +429,7 @@ Resources:
             Method: OPTIONS
             Auth:
               Authorizer: CognitoAuthorizer
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: CreateIncidentFunction
   IdentityPoolRoleAttachment:
@@ -495,19 +498,47 @@ Resources:
       Description: Handles CORS preflight requests for API Gateway
       Runtime:
         Ref: PythonRuntime
+<<<<<<< HEAD
+      CodeUri: s3://sam-artifacts-dev-kesse/1ec68bc7fcdcc4206b123997ec18be1b
+=======
       CodeUri: s3://sam-artifacts-dev-kesse/bd4a2c022a060bd9ded51cdf644f7442
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Handler: handle_global_options.handler
       Environment:
         Variables:
           STAGE:
             Ref: ApiStage
+<<<<<<< HEAD
+          AMPLIFY_DEV_DOMAIN:
+            Fn::Sub:
+            - https://${DevBranch}.${DefaultDomain}
+=======
           AMPLIFY_DOMAIN:
             Fn::Sub:
             - https://main.${DefaultDomain}
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
             - DefaultDomain:
                 Fn::GetAtt:
                 - AmplifyApp
                 - DefaultDomain
+<<<<<<< HEAD
+              DevBranch:
+                Fn::GetAtt:
+                - DevBranch
+                - BranchName
+          AMPLIFY_PROD_DOMAIN:
+            Fn::Sub:
+            - https://${MainBranch}.${DefaultDomain}
+            - DefaultDomain:
+                Fn::GetAtt:
+                - AmplifyApp
+                - DefaultDomain
+              MainBranch:
+                Fn::GetAtt:
+                - MainBranch
+                - BranchName
+=======
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Events:
         OptionsProxy:
           Type: Api
@@ -566,7 +597,11 @@ Resources:
       Runtime:
         Ref: PythonRuntime
       Handler: app.lambda_handler
+<<<<<<< HEAD
+      CodeUri: s3://sam-artifacts-dev-kesse/0c380061ba37930310c1fc01733e558a
+=======
       CodeUri: s3://sam-artifacts-dev-kesse/11ecad1df7b84d0c8226909ce5268d5d
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Policies:
       - Version: '2012-10-17'
         Statement:
@@ -586,7 +621,11 @@ Resources:
       Runtime:
         Ref: PythonRuntime
       Handler: app.lambda_handler
+<<<<<<< HEAD
+      CodeUri: s3://sam-artifacts-dev-kesse/b9bbc449b064998bd12993d2f5df3f35
+=======
       CodeUri: s3://sam-artifacts-dev-kesse/3797d764a58d08f3e339920ef3e7ea84
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Environment:
         Variables:
           USER_POOL_ID:
@@ -644,6 +683,8 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+<<<<<<< HEAD
+=======
         OptionsEvent:
           Type: Api
           Properties:
@@ -651,6 +692,7 @@ Resources:
             Method: OPTIONS
             Auth:
               Authorizer: NONE
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: GetMyIncidentsFunction
   ListIncidentsFunction:
@@ -680,6 +722,8 @@ Resources:
             Method: GET
             Auth:
               Authorizer: NONE
+<<<<<<< HEAD
+=======
         OptionsEvent:
           Type: Api
           Properties:
@@ -687,6 +731,7 @@ Resources:
             Method: OPTIONS
             Auth:
               Authorizer: NONE
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: ListIncidentsFunction
   UpdateIncidentStatusFunction:
@@ -719,6 +764,8 @@ Resources:
             Method: PUT
             Auth:
               Authorizer: NONE
+<<<<<<< HEAD
+=======
         OptionsEvent:
           Type: Api
           Properties:
@@ -726,6 +773,7 @@ Resources:
             Method: OPTIONS
             Auth:
               Authorizer: NONE
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: UpdateIncidentStatusFunction
   SubmitFeedbackFunction:
@@ -855,6 +903,24 @@ Resources:
       TopicName: status-updated
     Metadata:
       SamResourceId: StatusUpdatedTopic
+<<<<<<< HEAD
+  CognitoBackupTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: username
+        AttributeType: S
+      KeySchema:
+      - AttributeName: username
+        KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+    Metadata:
+      SamResourceId: CognitoBackupTable
+=======
   BackupBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -862,22 +928,36 @@ Resources:
         Fn::Sub: cognito-user-backups-${AWS::AccountId}-${AWS::Region}
     Metadata:
       SamResourceId: BackupBucket
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
   CognitoBackupFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: CognitoBackupFunction
+<<<<<<< HEAD
+      Description: Exports Cognito users daily to DynamoDB
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/4ba141906712be10994975f57cad3909
+=======
       Description: Exports Cognito users daily to S3
       CodeUri: s3://sam-artifacts-dev-kesse/b1e33bcebba47aebcfb97dc0e795bc7d
       Handler: app.lambda_handler
       Runtime: python3.12
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Timeout: 900
       MemorySize: 256
       Environment:
         Variables:
           USER_POOL_ID:
             Ref: UserPool
+<<<<<<< HEAD
+          BACKUP_TABLE:
+            Ref: CognitoBackupTable
+=======
           BUCKET:
             Ref: BackupBucket
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Policies:
       - Version: '2012-10-17'
         Statement:
@@ -890,15 +970,28 @@ Resources:
             - Arn
         - Effect: Allow
           Action:
+<<<<<<< HEAD
+          - dynamodb:PutItem
+          - dynamodb:BatchWriteItem
+          Resource:
+            Fn::GetAtt:
+            - CognitoBackupTable
+            - Arn
+=======
           - s3:PutObject
           Resource:
             Fn::Sub: arn:aws:s3:::${BackupBucket}/*
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: CognitoBackupFunction
   BackupSchedule:
     Type: AWS::Events::Rule
     Properties:
+<<<<<<< HEAD
+      ScheduleExpression: rate(1 hour)
+=======
       ScheduleExpression: rate(1 day)
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Targets:
       - Arn:
           Fn::GetAtt:
@@ -924,18 +1017,31 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: CognitoRestoreFunction
+<<<<<<< HEAD
+      Description: Restores Cognito users from DynamoDB backup
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/172554d50753aba7fd4cf67abcb3ded0
+=======
       Description: Restores Cognito users from S3 backup
       CodeUri: s3://sam-artifacts-dev-kesse/2a7c4efb38500a060a6c891ecdfd7258
       Handler: app.lambda_handler
       Runtime: python3.12
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Timeout: 900
       MemorySize: 256
       Environment:
         Variables:
           USER_POOL_ID:
             Ref: UserPool
+<<<<<<< HEAD
+          BACKUP_TABLE:
+            Ref: CognitoBackupTable
+=======
           BUCKET:
             Ref: BackupBucket
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Policies:
       - Version: '2012-10-17'
         Statement:
@@ -949,9 +1055,18 @@ Resources:
             - Arn
         - Effect: Allow
           Action:
+<<<<<<< HEAD
+          - dynamodb:Scan
+          - dynamodb:GetItem
+          Resource:
+            Fn::GetAtt:
+            - CognitoBackupTable
+            - Arn
+=======
           - s3:GetObject
           Resource:
             Fn::Sub: arn:aws:s3:::${BackupBucket}/*
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
     Metadata:
       SamResourceId: CognitoRestoreFunction
   CognitoHealthAlertTopic:
@@ -976,9 +1091,16 @@ Resources:
     Properties:
       FunctionName: CognitoHealthCheckFunction
       Description: Scheduled health check for Cognito User Pool
+<<<<<<< HEAD
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/6dba81f65636a6c9f73f310bdd368dcc
+=======
       CodeUri: s3://sam-artifacts-dev-kesse/6dba81f65636a6c9f73f310bdd368dcc
       Handler: app.lambda_handler
       Runtime: python3.12
+>>>>>>> 51a8b33d330ee85e2371455bb2fec4741b427488
       Timeout: 30
       MemorySize: 128
       Environment:

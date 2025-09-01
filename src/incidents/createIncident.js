@@ -3,13 +3,7 @@ const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
 
-const ALLOWED_ORIGINS = [
-  "http://localhost:4200",
-  "https://dev.d2zgxshg38rb8v.amplifyapp.com",
-];
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGINS.join(", "),
+let CORS_HEADERS = {
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
@@ -18,11 +12,20 @@ const CORS_HEADERS = {
 
 exports.handler = async (event) => {
   try {
+    let client_origin = event.headers.Origin || event.headers.origin;
+    console.log("Client origin:", client_origin);
+
+    
+    const UPDATED_SET_HEADERS = {
+      ...CORS_HEADERS,
+      "Access-Control-Allow-Origin": client_origin,
+    };
+    
     // Handle preflight CORS
     if (event.httpMethod === "OPTIONS") {
       return {
         statusCode: 200,
-        headers: CORS_HEADERS,
+        headers: UPDATED_SET_HEADERS,
         body: "",
       };
     }
@@ -69,7 +72,7 @@ exports.handler = async (event) => {
       } catch (error) {
         return {
           statusCode: 401,
-          headers: CORS_HEADERS,
+          headers: UPDATED_SET_HEADERS,
           body: JSON.stringify({ error: "Invalid JWT token" }),
         };
       }
@@ -78,7 +81,7 @@ exports.handler = async (event) => {
     if (!cognitoUserId) {
       return {
         statusCode: 401,
-        headers: CORS_HEADERS,
+        headers: UPDATED_SET_HEADERS,
         body: JSON.stringify({ error: "Unauthorized - missing user context" }),
       };
     }
@@ -89,7 +92,7 @@ exports.handler = async (event) => {
     if (!body.title || !body.description) {
       return {
         statusCode: 400,
-        headers: CORS_HEADERS,
+        headers: UPDATED_SET_HEADERS,
         body: JSON.stringify({ error: "Missing required fields" }),
       };
     }
@@ -103,7 +106,7 @@ exports.handler = async (event) => {
         if (typeof imageUrl !== "string") {
           return {
             statusCode: 400,
-            headers: CORS_HEADERS,
+            headers: UPDATED_SET_HEADERS,
             body: JSON.stringify({ error: "Invalid image URL provided" }),
           };
         }
@@ -113,7 +116,7 @@ exports.handler = async (event) => {
         } catch {
           return {
             statusCode: 400,
-            headers: CORS_HEADERS,
+            headers: UPDATED_SET_HEADERS,
             body: JSON.stringify({ error: "Invalid image URL format" }),
           };
         }
@@ -137,7 +140,7 @@ exports.handler = async (event) => {
     };
 
     // Save to DynamoDB
-    
+
     if (!process.env.INCIDENT_TABLE) {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
@@ -183,7 +186,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 201,
-      headers: CORS_HEADERS,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({
         message: "Incident created",
         incidentId,
@@ -209,7 +212,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode,
-      headers: CORS_HEADERS,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({
         error: errorMessage,
         details: error.message,
