@@ -1,87 +1,823 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Monitoring & Reporting Platform Backend (MSc Real Estate Capstone)
+Description: Incident Reporting App - Auth & Authorization Infrastructure
+Parameters:
+  ProjectTag:
+    Type: String
+    Default: incident-app
+  GitRepoUrl:
+    Type: String
+    Default: https://github.com/drex7/cmrp-frontend.git
+  GitHubTokenSecret:
+    Type: String
+    Default: cmrp-frontend/token
+  Env:
+    Type: String
+    Default: dev
+  PythonRuntime:
+    Type: String
+    Default: python3.12
+  NodeRuntime:
+    Type: String
+    Default: nodejs22.x
+  ApiStage:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - prod
+    Description: API Gateway Stage (dev or prod)
 Globals:
   Function:
-    Runtime: nodejs18.x
     Timeout: 10
     MemorySize: 256
-    CodeUri: ./src
-    Environment:
-      Variables:
-        INCIDENT_TABLE:
-          Ref: IncidentTable
-        FEEDBACK_TABLE:
-          Ref: FeedbackTable
-        ATTACHMENT_BUCKET:
-          Ref: IncidentAttachmentBucket
-        INCIDENT_REPORTED_TOPIC:
-          Ref: IncidentReportedTopic
-        STATUS_UPDATED_TOPIC:
-          Ref: StatusUpdatedTopic
 Resources:
+  AmplifyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AmplifyServiceRole
+      Description: IAM role assumed by AWS Amplify to build and deploy apps
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - amplify.amazonaws.com
+            - amplify.eu-central-1.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
+    Metadata:
+      SamResourceId: AmplifyRole
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: IncidentReportingAmplifyApp
+      Description: Incident Reporting App
+      Repository:
+        Ref: GitRepoUrl
+      IAMServiceRole:
+        Fn::GetAtt:
+        - AmplifyRole
+        - Arn
+      AccessToken:
+        Fn::Sub: '{{resolve:secretsmanager:${GitHubTokenSecret}:SecretString:GithubAccessToken_}}'
+      BuildSpec: "version: 1 \nfrontend:\n  phases:\n    preBuild:\n      commands:\n\
+        \        - yarn install --cache-folder .yarn-cache --prefer-offline\n    \
+        \    - npx ng version\n    build:\n      commands:\n          # generate src/environments/environment.ts\n\
+        \        - |\n          mkdir -p src/environments\n          echo \"export\
+        \ const environment = {\" > src/environments/environment.ts\n          echo\
+        \ \"export const environment = {\" > src/environments/environment.ts\n   \
+        \       echo \"  authUrl: '$authUrl',\" >> src/environments/environment.ts\n\
+        \          echo \"  identityPoolId: '$identityPoolId',\" >> src/environments/environment.ts\n\
+        \          echo \"  userPoolId: '$userPoolId',\" >> src/environments/environment.ts\n\
+        \          echo \"  userClientPoolId: '$userClientPoolId',\" >> src/environments/environment.ts\n\
+        \          echo \"  incidentsUrl: '$incidentsUrl',\" >> src/environments/environment.ts\n\
+        \          echo \"};\" >> src/environments/environment.ts\n        - yarn\
+        \ run build -- --configuration=production\n  artifacts:\n    baseDirectory:\
+        \ dist/cmrp-frontend/browser\n    files:\n      - '**/*'\n  cache:\n    paths:\n\
+        \      - .npm/**/*\n      - node_modules/**/*\nredirects:\n  - source: </^[^.]+$|\\\
+        \\.(?!(css|gif|ico|jpg|jpeg|js|png|svg|woff|woff2|ttf|map)$)([^.]+$)/>\n \
+        \   target: /index.html\n    status: 200\n"
+    Metadata:
+      SamResourceId: AmplifyApp
+  MainBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId:
+        Fn::GetAtt:
+        - AmplifyApp
+        - AppId
+      BranchName: main
+      EnableAutoBuild: true
+      Stage: PRODUCTION
+    Metadata:
+      SamResourceId: MainBranch
+  DevBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId:
+        Fn::GetAtt:
+        - AmplifyApp
+        - AppId
+      BranchName: dev
+      EnableAutoBuild: true
+      Stage: DEVELOPMENT
+    Metadata:
+      SamResourceId: DevBranch
+  IncidentTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+        RecoveryPeriodInDays: 35
+      AttributeDefinitions:
+      - AttributeName: incidentId
+        AttributeType: S
+      - AttributeName: category
+        AttributeType: S
+      - AttributeName: status
+        AttributeType: S
+      - AttributeName: reportedBy
+        AttributeType: S
+      - AttributeName: region
+        AttributeType: S
+      - AttributeName: city
+        AttributeType: S
+      - AttributeName: assignedTo
+        AttributeType: S
+      - AttributeName: severity
+        AttributeType: S
+      KeySchema:
+      - AttributeName: incidentId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: ByStatusIndex
+        KeySchema:
+        - AttributeName: status
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: BySeverityIndex
+        KeySchema:
+        - AttributeName: severity
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: ByCategoryIndex
+        KeySchema:
+        - AttributeName: category
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: ByReportedByIndex
+        KeySchema:
+        - AttributeName: reportedBy
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: ByAssignedToIndex
+        KeySchema:
+        - AttributeName: assignedTo
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: ByRegionIndex
+        KeySchema:
+        - AttributeName: region
+          KeyType: HASH
+        - AttributeName: incidentId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      - IndexName: ByCityCategoryIndex
+        KeySchema:
+        - AttributeName: city
+          KeyType: HASH
+        - AttributeName: category
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+      Tags:
+      - Key: ProjectTag
+        Value:
+          Ref: ProjectTag
+    Metadata:
+      SamResourceId: IncidentTable
+  UserPoolBackupTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: UserPoolBackupTable
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      AttributeDefinitions:
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: backupDate
+        AttributeType: S
+      KeySchema:
+      - AttributeName: userId
+        KeyType: HASH
+      - AttributeName: backupDate
+        KeyType: RANGE
+      Tags:
+      - Key: ProjectTag
+        Value:
+          Ref: ProjectTag
+    Metadata:
+      SamResourceId: UserPoolBackupTable
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: MonitoringUserPool
+      UserPoolName: IncidentReportingUserPool
+      UsernameAttributes:
+      - email
       AutoVerifiedAttributes:
       - email
+      LambdaConfig:
+        CustomMessage:
+          Fn::GetAtt:
+          - CustomMessageFunction
+          - Arn
+      Schema:
+      - Name: name
+        AttributeDataType: String
+        Mutable: true
+        Required: true
+      - Name: region
+        AttributeDataType: String
+        Mutable: true
+        Required: false
+      - Name: country
+        AttributeDataType: String
+        Mutable: true
+        Required: false
+      - Name: city
+        AttributeDataType: String
+        Mutable: true
+        Required: false
+      - Name: telephone
+        AttributeDataType: String
+        Mutable: true
+        Required: false
       Policies:
         PasswordPolicy:
           MinimumLength: 8
-      Schema:
-      - Name: email
-        Required: true
-        Mutable: true
-      UsernameAttributes:
-      - email
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
     Metadata:
       SamResourceId: UserPool
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: MonitoringUserPoolClient
+      ClientName: IncidentReportingFrontendClient
       UserPoolId:
         Ref: UserPool
       GenerateSecret: false
+      ExplicitAuthFlows:
+      - ALLOW_USER_PASSWORD_AUTH
+      - ALLOW_REFRESH_TOKEN_AUTH
+      - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+      - COGNITO
+      PreventUserExistenceErrors: ENABLED
     Metadata:
       SamResourceId: UserPoolClient
-  UserPoolGroups:
-    Type: AWS::CloudFormation::Stack
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
     Properties:
-      TemplateURL: https://sam-artifacts-dev-kesse.s3.eu-west-1.amazonaws.com/cognito-user-pool-groups.yaml
-      Parameters:
-        UserPoolId:
-          Ref: UserPool
-        Groups: citizen,cityAuth,admin
+      IdentityPoolName: IncidentReportingIdentityPool
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+      - ClientId:
+          Ref: UserPoolClient
+        ProviderName:
+          Fn::GetAtt:
+          - UserPool
+          - ProviderName
     Metadata:
-      SamResourceId: UserPoolGroups
-  IncidentTable:
-    Type: AWS::DynamoDB::Table
+      SamResourceId: IdentityPool
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
     Properties:
-      TableName: IncidentTable
-      AttributeDefinitions:
-      - AttributeName: id
-        AttributeType: S
-      KeySchema:
-      - AttributeName: id
-        KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
+      GroupName: Admin
+      UserPoolId:
+        Ref: UserPool
+      Precedence: 1
     Metadata:
-      SamResourceId: IncidentTable
-  FeedbackTable:
-    Type: AWS::DynamoDB::Table
+      SamResourceId: AdminGroup
+  CityOfficialGroup:
+    Type: AWS::Cognito::UserPoolGroup
     Properties:
-      TableName: FeedbackTable
-      AttributeDefinitions:
-      - AttributeName: id
-        AttributeType: S
-      KeySchema:
-      - AttributeName: id
-        KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
+      GroupName: CityOfficial
+      UserPoolId:
+        Ref: UserPool
+      Precedence: 2
     Metadata:
-      SamResourceId: FeedbackTable
+      SamResourceId: CityOfficialGroup
+  IdentityPoolAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IncidentReportingAuthRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              cognito-identity.amazonaws.com:aud:
+                Ref: IdentityPool
+            ForAnyValue:StringLike:
+              cognito-identity.amazonaws.com:amr: authenticated
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    Metadata:
+      SamResourceId: IdentityPoolAuthRole
+  IdentityPoolUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IncidentReportingUnauthRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Deny
+          Principal:
+            Federated: cognito-identity.amazonaws.com
+          Action: sts:AssumeRoleWithWebIdentity
+          Condition:
+            StringEquals:
+              cognito-identity.amazonaws.com:aud:
+                Ref: IdentityPool
+            ForAnyValue:StringLike:
+              cognito-identity.amazonaws.com:amr: unauthenticated
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonCognitoReadOnly
+    Metadata:
+      SamResourceId: IdentityPoolUnauthRole
+  GetUploadUrlsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/3835d380a6e7f172f0db4c5fe1d4a6c7
+      Handler: getUploadUrls.handler
+      Runtime:
+        Ref: NodeRuntime
+      Policies:
+      - S3WritePolicy:
+          BucketName:
+            Ref: IncidentAttachmentBucket
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /upload-urls
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: GetUploadUrlsFunction
+  CreateIncidentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/3835d380a6e7f172f0db4c5fe1d4a6c7
+      Handler: createIncident.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE:
+            Ref: IncidentTable
+          ENV:
+            Ref: Env
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: IncidentTable
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Ref: IncidentReportedTopic
+      - Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ListUsers
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /incidents
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: CreateIncidentFunction
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId:
+        Ref: IdentityPool
+      Roles:
+        authenticated:
+          Fn::GetAtt:
+          - IdentityPoolAuthRole
+          - Arn
+        unauthenticated:
+          Fn::GetAtt:
+          - IdentityPoolUnauthRole
+          - Arn
+    Metadata:
+      SamResourceId: IdentityPoolRoleAttachment
+  AuthUtilsLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: IncidentReportingAuthUtils
+      Description: Shared authorization utilities for admin-only Lambdas
+      ContentUri: s3://sam-artifacts-dev-kesse/38f3d1a418ec693953d566a3a61edfb8
+      CompatibleRuntimes:
+      - Ref: PythonRuntime
+    Metadata:
+      SamResourceId: AuthUtilsLayer
+  CustomMessagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: CustomMessageFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - UserPool
+        - Arn
+    Metadata:
+      SamResourceId: CustomMessagePermission
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: ApiStage
+      Variables:
+        Stage:
+          Ref: ApiStage
+      EndpointConfiguration:
+        Type: REGIONAL
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn:
+              Fn::GetAtt:
+              - UserPool
+              - Arn
+    Metadata:
+      SamResourceId: ApiGateway
+  HandleGlobalOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HandleGlobalOptionsFunction
+      Description: Handles CORS preflight requests for API Gateway
+      Runtime:
+        Ref: PythonRuntime
+      CodeUri: s3://sam-artifacts-dev-kesse/1ec68bc7fcdcc4206b123997ec18be1b
+      Handler: handle_global_options.handler
+      Environment:
+        Variables:
+          STAGE:
+            Ref: ApiStage
+          AMPLIFY_DEV_DOMAIN:
+            Fn::Sub:
+            - https://${DevBranch}.${DefaultDomain}
+            - DefaultDomain:
+                Fn::GetAtt:
+                - AmplifyApp
+                - DefaultDomain
+              DevBranch:
+                Fn::GetAtt:
+                - DevBranch
+                - BranchName
+          AMPLIFY_PROD_DOMAIN:
+            Fn::Sub:
+            - https://${MainBranch}.${DefaultDomain}
+            - DefaultDomain:
+                Fn::GetAtt:
+                - AmplifyApp
+                - DefaultDomain
+              MainBranch:
+                Fn::GetAtt:
+                - MainBranch
+                - BranchName
+      Events:
+        OptionsProxy:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            RestApiId:
+              Ref: ApiGateway
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: HandleGlobalOptionsFunction
+  AdminInviteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AdminInviteUserFunction
+      Description: Allows Admins to invite new Admins or City Officials
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/4bbde153c428f698c535e854afcedbe2
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+      Layers:
+      - Ref: AuthUtilsLayer
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminCreateUser
+          - cognito-idp:AdminAddUserToGroup
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /invite
+            RestApiId:
+              Ref: ApiGateway
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: AdminInviteFunction
+  CustomMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoCustomMessageFunction
+      Description: Customizes Cognito emails for invites and password resets
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/0c380061ba37930310c1fc01733e558a
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource: '*'
+    Metadata:
+      SamResourceId: CustomMessageFunction
+  ListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ListUserStatsFunction
+      Description: Lists user counts by group and returns all users
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/b9bbc449b064998bd12993d2f5df3f35
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+      Layers:
+      - Ref: AuthUtilsLayer
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:ListUsers
+          - cognito-idp:ListUsersInGroup
+          - cognito-idp:AdminListGroupsForUser
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /users
+            RestApiId:
+              Ref: ApiGateway
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: ListUsersFunction
+  GetMyIncidentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/3835d380a6e7f172f0db4c5fe1d4a6c7
+      Handler: getMyIncidents.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE:
+            Ref: IncidentTable
+          ENV:
+            Ref: Env
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: IncidentTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /incidents/mine
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+    Metadata:
+      SamResourceId: GetMyIncidentsFunction
+  ListIncidentsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/3835d380a6e7f172f0db4c5fe1d4a6c7
+      Handler: listIncidents.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE:
+            Ref: IncidentTable
+          ENV:
+            Ref: Env
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: IncidentTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /incidents
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: ListIncidentsFunction
+  UpdateIncidentStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/3835d380a6e7f172f0db4c5fe1d4a6c7
+      Handler: updateIncidentStatus.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE:
+            Ref: IncidentTable
+          ENV:
+            Ref: Env
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: IncidentTable
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Ref: StatusUpdatedTopic
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /incidents/{id}/status
+            Method: PUT
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: UpdateIncidentStatusFunction
+  SubmitFeedbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/dc3d39b8429074420bbba3d807112d96
+      Handler: submitFeedback.handler
+      Runtime:
+        Ref: NodeRuntime
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: IncidentTable
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ApiGateway
+            Path: /feedback
+            Method: POST
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: SubmitFeedbackFunction
+  NotifyOfficialFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/f339e72f91b4fdaedc382f5a2e64bdc5
+      Handler: notifyOfficial.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE:
+            Ref: IncidentTable
+          INCIDENT_REPORTED_TOPIC:
+            Ref: IncidentReportedTopic
+      Policies:
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Ref: IncidentReportedTopic
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: IncidentTable
+      Events:
+        IncidentReportedEvent:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: IncidentReportedTopic
+    Metadata:
+      SamResourceId: NotifyOfficialFunction
+  NotifyReporterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/f339e72f91b4fdaedc382f5a2e64bdc5
+      Handler: notifyReporter.handler
+      Runtime:
+        Ref: NodeRuntime
+      Policies:
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Ref: StatusUpdatedTopic
+      Events:
+        StatusUpdatedEvent:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: StatusUpdatedTopic
+    Metadata:
+      SamResourceId: NotifyReporterFunction
+  GetPublicDashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://sam-artifacts-dev-kesse/4c9bc01877abc209c794b81b451d64b5
+      Handler: getPublicDashboard.handler
+      Runtime:
+        Ref: NodeRuntime
+      Environment:
+        Variables:
+          QUICKSIGHT_DASHBOARD_ID: 9824a03f-fef9-4507-b432-bdd619b87d96
+          AWS_ACCOUNT_ID: GroupOne
+          REGION: eu-west-1
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - quicksight:GetDashboardEmbedUrl
+          - quicksight:GenerateEmbedUrlForAnonymousUser
+          Resource:
+          - Fn::Sub: arn:aws:quicksight:eu-west-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /dashboard
+            RestApiId:
+              Ref: ApiGateway
+            Method: GET
+            Auth:
+              Authorizer: NONE
+    Metadata:
+      SamResourceId: GetPublicDashboardFunction
   IncidentAttachmentBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -106,62 +842,42 @@ Resources:
       TopicName: status-updated
     Metadata:
       SamResourceId: StatusUpdatedTopic
-  ApiGateway:
-    Type: AWS::Serverless::Api
+  CognitoBackupTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      StageName: prod
-      BinaryMediaTypes:
-      - multipart/form-data
-      - image/*
-      - application/octet-stream
-      Cors:
-        AllowMethods: '''OPTIONS,GET,POST,PUT'''
-        AllowHeaders: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key'''
-        AllowOrigin: '''*'''
-        AllowCredentials: false
-      Auth:
-        DefaultAuthorizer: CognitoAuthorizer
-        Authorizers:
-          CognitoAuthorizer:
-            UserPoolArn:
-              Fn::GetAtt:
-              - UserPool
-              - Arn
+      TableName:
+        Fn::Sub: cognito-user-backups-${AWS::AccountId}-${AWS::Region}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: username
+        AttributeType: S
+      KeySchema:
+      - AttributeName: username
+        KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
     Metadata:
-      SamResourceId: ApiGateway
-  GetUploadUrlsFunction:
+      SamResourceId: CognitoBackupTable
+  CognitoBackupFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/getUploadUrls.handler
+      FunctionName: CognitoBackupFunction
+      Description: Exports Cognito users daily to DynamoDB
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/4ba141906712be10994975f57cad3909
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          BACKUP_TABLE:
+            Ref: CognitoBackupTable
       Policies:
-      - S3WritePolicy:
-          BucketName:
-            Ref: IncidentAttachmentBucket
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /upload-urls
-            Method: post
-            Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
-    Metadata:
-      SamResourceId: GetUploadUrlsFunction
-  CreateIncidentFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: incidents/createIncident.handler
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: IncidentTable
-      - SNSPublishMessagePolicy:
-          TopicName:
-            Ref: IncidentReportedTopic
-      - Statement:
+      - Version: '2012-10-17'
+        Statement:
         - Effect: Allow
           Action:
           - cognito-idp:ListUsers
@@ -169,133 +885,186 @@ Resources:
             Fn::GetAtt:
             - UserPool
             - Arn
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /incidents
-            Method: post
-            Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          - dynamodb:BatchWriteItem
+          Resource:
+            Fn::GetAtt:
+            - CognitoBackupTable
+            - Arn
     Metadata:
-      SamResourceId: CreateIncidentFunction
-  GetMyIncidentsFunction:
+      SamResourceId: CognitoBackupFunction
+  BackupSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(1 hour)
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - CognitoBackupFunction
+          - Arn
+        Id: BackupTarget
+    Metadata:
+      SamResourceId: BackupSchedule
+  BackupPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: CognitoBackupFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - BackupSchedule
+        - Arn
+    Metadata:
+      SamResourceId: BackupPermission
+  CognitoRestoreFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/getMyIncidents.handler
+      FunctionName: CognitoRestoreFunction
+      Description: Restores Cognito users from DynamoDB backup
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/172554d50753aba7fd4cf67abcb3ded0
+      Timeout: 900
+      MemorySize: 256
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          BACKUP_TABLE:
+            Ref: CognitoBackupTable
       Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: IncidentTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /incidents/mine
-            Method: get
-            Auth:
-              Authorizer: CognitoAuthorizer
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:AdminCreateUser
+          - cognito-idp:AdminAddUserToGroup
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+        - Effect: Allow
+          Action:
+          - dynamodb:Scan
+          - dynamodb:GetItem
+          Resource:
+            Fn::GetAtt:
+            - CognitoBackupTable
+            - Arn
     Metadata:
-      SamResourceId: GetMyIncidentsFunction
-  ListIncidentsFunction:
+      SamResourceId: CognitoRestoreFunction
+  CognitoHealthAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: Cognito User Pool Health Alerts
+      TopicName:
+        Fn::Sub: ${AWS::StackName}-cognito-health-alerts
+    Metadata:
+      SamResourceId: CognitoHealthAlertTopic
+  CognitoHealthAlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        Ref: CognitoHealthAlertTopic
+      Protocol: email
+      Endpoint: ehanson787@gmail.com
+    Metadata:
+      SamResourceId: CognitoHealthAlertSubscription
+  CognitoHealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: incidents/listIncidents.handler
+      FunctionName: CognitoHealthCheckFunction
+      Description: Scheduled health check for Cognito User Pool
+      Runtime:
+        Ref: PythonRuntime
+      Handler: app.lambda_handler
+      CodeUri: s3://sam-artifacts-dev-kesse/6dba81f65636a6c9f73f310bdd368dcc
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID:
+            Ref: UserPool
+          ALERT_TOPIC_ARN:
+            Ref: CognitoHealthAlertTopic
       Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: IncidentTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /incidents
-            Method: get
-            Auth:
-              Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - cognito-idp:DescribeUserPool
+          Resource:
+            Fn::GetAtt:
+            - UserPool
+            - Arn
+        - Effect: Allow
+          Action:
+          - sns:Publish
+          Resource:
+            Ref: CognitoHealthAlertTopic
     Metadata:
-      SamResourceId: ListIncidentsFunction
-  UpdateIncidentStatusFunction:
-    Type: AWS::Serverless::Function
+      SamResourceId: CognitoHealthCheckFunction
+  CognitoHealthCheckSchedule:
+    Type: AWS::Events::Rule
     Properties:
-      Handler: incidents/updateIncidentStatus.handler
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: IncidentTable
-      - SNSPublishMessagePolicy:
-          TopicName:
-            Ref: StatusUpdatedTopic
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /incidents/{id}/status
-            Method: put
-            Auth:
-              Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
+      ScheduleExpression: rate(30 minutes)
+      State: ENABLED
+      Targets:
+      - Arn:
+          Fn::GetAtt:
+          - CognitoHealthCheckFunction
+          - Arn
+        Id: CognitoHealthCheckTarget
     Metadata:
-      SamResourceId: UpdateIncidentStatusFunction
-  SubmitFeedbackFunction:
-    Type: AWS::Serverless::Function
+      SamResourceId: CognitoHealthCheckSchedule
+  CognitoHealthCheckPermission:
+    Type: AWS::Lambda::Permission
     Properties:
-      Handler: feedback/submitFeedback.handler
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: FeedbackTable
-      Events:
-        Api:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: ApiGateway
-            Path: /feedback
-            Method: post
-            Auth:
-              Authorizer: NONE
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
+      FunctionName:
+        Ref: CognitoHealthCheckFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn:
+        Fn::GetAtt:
+        - CognitoHealthCheckSchedule
+        - Arn
     Metadata:
-      SamResourceId: SubmitFeedbackFunction
-  NotifyOfficialFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: notifications/notifyOfficial.handler
-      Policies:
-      - SNSPublishMessagePolicy:
-          TopicName:
-            Ref: IncidentReportedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
-    Metadata:
-      SamResourceId: NotifyOfficialFunction
-  NotifyReporterFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Handler: notifications/notifyReporter.handler
-      Policies:
-      - SNSPublishMessagePolicy:
-          TopicName:
-            Ref: StatusUpdatedTopic
-      CodeUri: s3://sam-artifacts-dev-kesse/d5f48b255e33756fb652e8afde6c7ca0
-    Metadata:
-      SamResourceId: NotifyReporterFunction
+      SamResourceId: CognitoHealthCheckPermission
 Outputs:
-  ApiUrl:
-    Description: API Gateway endpoint URL
+  IncidentTableName:
+    Description: The name of the DynamoDB table for incident reports
     Value:
-      Fn::Sub: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/
+      Ref: IncidentTable
+  UserPoolBackupTableName:
+    Description: The name of the DynamoDB table for incident reports
+    Value:
+      Ref: UserPoolBackupTable
+  AmplifyAppId:
+    Description: The ID of the deployed Amplify application
+    Value:
+      Fn::GetAtt:
+      - AmplifyApp
+      - AppId
+  AmplifyAppName:
+    Description: The name of the deployed Amplify application
+    Value:
+      Fn::GetAtt:
+      - AmplifyApp
+      - AppName
+  AmplifyDomain:
+    Description: The domain of the deployed Amplify application
+    Value:
+      Fn::Sub:
+      - https://main.${DefaultDomain}
+      - DefaultDomain:
+          Fn::GetAtt:
+          - AmplifyApp
+          - DefaultDomain
   UserPoolId:
     Description: Cognito User Pool ID
     Value:
@@ -304,23 +1073,11 @@ Outputs:
     Description: Cognito User Pool Client ID
     Value:
       Ref: UserPoolClient
-  IncidentTableName:
-    Description: Incident DynamoDB Table Name
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
     Value:
-      Ref: IncidentTable
-  FeedbackTableName:
-    Description: Feedback DynamoDB Table Name
+      Ref: IdentityPool
+  ApiGatewayUrl:
+    Description: Base URL for API Gateway
     Value:
-      Ref: FeedbackTable
-  AttachmentBucketName:
-    Description: Incident Attachment S3 Bucket Name
-    Value:
-      Ref: IncidentAttachmentBucket
-  IncidentReportedTopicArn:
-    Description: Incident Reported SNS Topic ARN
-    Value:
-      Ref: IncidentReportedTopic
-  StatusUpdatedTopicArn:
-    Description: Status Updated SNS Topic ARN
-    Value:
-      Ref: StatusUpdatedTopic
+      Fn::Sub: https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${ApiStage}

@@ -1,18 +1,25 @@
 const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
 
-const ALLOWED_ORIGINS = [
-  "http://localhost:4200",
-  "https://dev.d2zgxshg38rb8v.amplifyapp.com",
-];
-
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": ALLOWED_ORIGINS.join(", "),
+let CORS_HEADERS = {
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
 exports.handler = async (event) => {
+  // normalize headers first
+  const headers = Object.fromEntries(
+    Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
+  );
+  const client_origin = headers.origin || "*"; // fallback to '*' if missing
+
+  const UPDATED_SET_HEADERS = {
+    ...CORS_HEADERS,
+    "Access-Control-Allow-Origin": client_origin,
+  };
+
   try {
+    console.log("Client origin:", client_origin);
+
     const client = new DynamoDBClient({
       region: process.env.AWS_REGION || "eu-central-1",
       requestHandler:
@@ -22,35 +29,33 @@ exports.handler = async (event) => {
         }),
     });
 
-    // If preflight CORS request
+    // Preflight request
     if (event.httpMethod === "OPTIONS") {
       return {
         statusCode: 200,
-        headers: CORS_HEADERS,
+        headers: UPDATED_SET_HEADERS,
         body: "",
       };
     }
+
     console.log("Incident table: ", process.env.INCIDENT_TABLE);
-    // Ensure INCIDENT_TABLE is set
     if (!process.env.INCIDENT_TABLE) {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
 
-    const params = { TableName: process.env.INCIDENT_TABLE };
-    const result = await client.send(new ScanCommand(params));
-
+    const result = await client.send(new ScanCommand({ TableName: process.env.INCIDENT_TABLE }));
     console.log("DynamoDB scan completed, found", result.Items.length, "items");
 
     return {
       statusCode: 200,
-      headers: CORS_HEADERS,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({ incidents: result.Items }),
     };
   } catch (err) {
     console.error("Error retrieving incidents:", err);
     return {
       statusCode: 500,
-      headers: CORS_HEADERS,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({ error: "Something went wrong!" }),
     };
   }
