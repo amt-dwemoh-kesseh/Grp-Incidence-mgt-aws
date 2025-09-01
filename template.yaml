@@ -450,9 +450,14 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref ApiStage
-          AMPLIFY_DOMAIN: !Sub 
-            - 'https://main.${DefaultDomain}'
+          AMPLIFY_DEV_DOMAIN: !Sub 
+            - 'https://${DevBranch}.${DefaultDomain}/'
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
+            - DevBranch: !GetAtt DevBranch.BranchName
+          AMPLIFY_PROD_DOMAIN: !Sub 
+            - 'https://${MainBranch}.${DefaultDomain}/'
+            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
+            - MainBranch: !GetAtt MainBranch.BranchName
       Events:
         OptionsProxy:
           Type: Api
