@@ -15,7 +15,7 @@ sns = boto3.client("sns")
 
 # Environment variables
 USER_POOL_ID = os.environ["USER_POOL_ID"]
-SNS_TOPIC_ARN = os.environ["SNS_TOPIC_ARN"]
+SNS_TOPIC_ARN = os.environ["ALERT_TOPIC_ARN"]
 
 def lambda_handler(event, context):
     """Health check for Cognito User Pool."""
