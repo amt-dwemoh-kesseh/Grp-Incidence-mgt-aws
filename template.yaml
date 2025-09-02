@@ -17,6 +17,7 @@ Parameters:
       - dev
       - prod
     Description: "API Gateway Stage (dev or prod)"
+  FrontendLocalDomain: { Type: String, Default: http://localhost:4200 }
 
 Globals:
   Function:
@@ -455,6 +456,7 @@ Resources:
       Environment:
         Variables:
           STAGE: !Ref ApiStage
+          AMPLIFY_LOCAL_DOMAIN: !Ref FrontendLocalDomain
           AMPLIFY_DEV_DOMAIN: !Sub 
             - 'https://${DevBranch}.${DefaultDomain}'
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
@@ -553,6 +555,41 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+
+
+  CognitoDeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoDeleteUserFunction
+      Description: Deletes a user from the Cognito User Pool
+      Runtime: python3.12
+      Handler: app.lambda_handler
+      CodeUri: src/delete/
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Layers:
+        - !Ref AuthUtilsLayer
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /delete
+            RestApiId: !Ref ApiGateway
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
 
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
@@ -689,7 +726,16 @@ Resources:
       Environment:
         Variables:
           QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
-          AWS_ACCOUNT_ID: "GroupOne"
+          AMPLIFY_LOCAL_DOMAIN: !Ref FrontendLocalDomain
+          AMPLIFY_DEV_DOMAIN: !Sub 
+            - 'https://${DevBranch}.${DefaultDomain}'
+            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
+              DevBranch: !GetAtt DevBranch.BranchName
+          AMPLIFY_PROD_DOMAIN: !Sub 
+            - 'https://${MainBranch}.${DefaultDomain}'
+            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
+              MainBranch: !GetAtt MainBranch.BranchName
+          # AWS_ACCOUNT_ID: "GroupOne"
           REGION: "eu-west-1"
       Policies:
         - Version: '2012-10-17'
@@ -772,6 +818,10 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:BatchWriteItem
               Resource: !GetAtt CognitoBackupTable.Arn
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt UserPool.Arn
 
 
   BackupSchedule:

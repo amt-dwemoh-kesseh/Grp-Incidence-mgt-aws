@@ -85,32 +85,17 @@ def lambda_handler(event, context):
 
         event["response"]["emailSubject"] = f"Welcome to {brand_name} 🎉"
 
-        event["response"]["emailMessage"] = f"""
-            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-                <h2 style="color: {brand_color};">👋 Welcome to {brand_name}!</h2>
-                <p>Hi <b>{name}</b>,</p>
-                <p>Your account has been created successfully. Here are your credentials:</p>
-
-                <div style="padding: 10px; background: #f4f4f4; border-radius: 8px; margin: 15px 0;">
-                    <p><b>Email:</b> {user_email}</p>
-                    <p><b>Temporary Password:</b> {temp_password}</p>
-                </div>
-
-                <p>To activate your account, please reset your password using the link below:</p>
-                <p>
-                    <a href="{reset_link}" 
-                    style="display:inline-block; background:{brand_color}; color:#fff; 
-                            padding:10px 20px; border-radius:5px; text-decoration:none; font-weight:bold;">
-                        🔑 Reset My Password
-                    </a>
-                </p>
-
-                <p>If the button doesn’t work, copy and paste this link into your browser:</p>
-                <p style="font-size: 14px; color: #555;">{reset_link}</p>
-
-                <p>Cheers,<br>{brand_name} Team 🚀</p>
-            </div>
-            """
+        event["response"]["emailMessage"] =  f"""
+                <html>
+                    <body>
+                        <h2>Welcome to {brand_name}!</h2>
+                        <p>Hi {name},</p>
+                        <p>Your temporary password is <b>{temp_password}</b> and email is: <b>{user_email}</b></p>
+                        <p>Reset here: <a href="{reset_link}">Reset My Password</a></p>
+                    </body>
+                </html>
+                """
+                
     elif trigger == "CustomMessage_ForgotPassword":
         logger.info(f"CustomMessage_ForgotPassword triggered for {user_email}")
         
