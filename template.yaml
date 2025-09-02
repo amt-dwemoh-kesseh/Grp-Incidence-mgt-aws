@@ -562,7 +562,7 @@ Resources:
     Properties:
       FunctionName: CognitoDeleteUserFunction
       Description: Deletes a user from the Cognito User Pool
-      Runtime: python3.12
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/delete/
       Timeout: 30
@@ -584,9 +584,9 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
-            Path: /delete
+            Path: /user
             RestApiId: !Ref ApiGateway
-            Method: POST
+            Method: DELETE
             Auth:
               Authorizer: CognitoAuthorizer
 
@@ -735,7 +735,7 @@ Resources:
             - 'https://${MainBranch}.${DefaultDomain}'
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
               MainBranch: !GetAtt MainBranch.BranchName
-          # AWS_ACCOUNT_ID: "GroupOne"
+          AWS_ACCOUNT_ID: !Sub ${AWS::AccountId}
           REGION: "eu-west-1"
       Policies:
         - Version: '2012-10-17'
