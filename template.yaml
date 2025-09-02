@@ -426,7 +426,7 @@ Resources:
       Environment:
         Variables:
           USER_POOL_ID: !Ref UserPool
-          ALERT_TOPIC_ARN: !Ref CognitoHealthAlertTopic
+          SNS_TOPIC_ARN: !Ref CognitoHealthAlertTopic
       Policies:
         - Version: '2012-10-17'
           Statement:
