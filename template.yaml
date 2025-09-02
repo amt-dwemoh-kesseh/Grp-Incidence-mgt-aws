@@ -553,6 +553,41 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
+
+  CognitoDeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CognitoDeleteUserFunction
+      Description: Deletes a user from the Cognito User Pool
+      Runtime: python3.12
+      Handler: app.lambda_handler
+      CodeUri: src/delete/
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+      Layers:
+        - !Ref AuthUtilsLayer
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:ListUsers
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /delete
+            RestApiId: !Ref ApiGateway
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -771,6 +806,10 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:BatchWriteItem
               Resource: !GetAtt CognitoBackupTable.Arn
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminListGroupsForUser
+              Resource: !GetAtt UserPool.Arn
 
 
   BackupSchedule:
