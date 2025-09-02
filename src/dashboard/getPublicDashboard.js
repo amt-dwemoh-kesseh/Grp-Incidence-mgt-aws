@@ -7,6 +7,15 @@ exports.handler = async (event) => {
       QUICKSIGHT_DASHBOARD_ID: process.env.QUICKSIGHT_DASHBOARD_ID
     });
 
+    // Look into region (region of dashboard might be diff from region of lambda)
+    const QuickSightAuthorizedResourceArns = [
+      `arn:aws:quicksight:${process.env.AWS_REGION}:${process.env.AWS_ACCOUNT_ID}:dashboard/${process.env.QUICKSIGHT_DASHBOARD_ID}`
+    ]
+    const AllowedDomains = [
+      process.env.AMPLIFY_LOCAL_DOMAIN,
+      process.env.AMPLIFY_DEV_DOMAIN,
+      process.env.AMPLIFY_PROD_DOMAIN
+    ]
     // Check if running locally (SAM local doesn't have AWS credentials)
     const isLocal = process.env.AWS_SAM_LOCAL === 'true' || !process.env.AWS_REGION || process.env._LAMBDA_SERVER_PORT;
 
@@ -28,20 +37,22 @@ exports.handler = async (event) => {
         })
       };
     }
-
-    console.log('Loading AWS SDK for production');
+    
+    https: console.log("Loading AWS SDK for production");
     const AWS = require('aws-sdk');
     const quicksight = new AWS.QuickSight({ region: process.env.AWS_REGION });
 
     const params = {
       AwsAccountId: process.env.AWS_ACCOUNT_ID,
-      Namespace: 'default',
+      Namespace: "default",
       SessionLifetimeInMinutes: 60,
+      AuthorizedResourceArns: QuickSightAuthorizedResourceArns,
+      AllowedDomains: AllowedDomains,
       ExperienceConfiguration: {
         Dashboard: {
-          InitialDashboardId: process.env.QUICKSIGHT_DASHBOARD_ID
-        }
-      }
+          InitialDashboardId: process.env.QUICKSIGHT_DASHBOARD_ID,
+        },
+      },
     };
 
     console.log('Calling QuickSight API');
