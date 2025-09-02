@@ -1,113 +1,165 @@
-const AWS = require("aws-sdk");
-const dynamo = new AWS.DynamoDB.DocumentClient();
-const sns = new AWS.SNS();
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const {
+  DynamoDBDocumentClient,
+  GetCommand,
+  UpdateCommand,
+} = require("@aws-sdk/lib-dynamodb");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
+};
+
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient({
+    region: process.env.AWS_REGION || "eu-central-1",
+    requestHandler: new NodeHttpHandler({
+      connectionTimeout: 5000,
+      socketTimeout: 5000,
+    }),
+  })
+);
+
+const sns = new SNSClient({ region: process.env.AWS_REGION || "eu-central-1" });
 
 exports.handler = async (event) => {
+  console.log("Function Started");
+  const headers = Object.fromEntries(
+    Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
+  );
+  const client_origin = headers.origin || "*";
+
+  const UPDATED_SET_HEADERS = {
+    ...CORS_HEADERS,
+    "Access-Control-Allow-Origin": client_origin,
+  };
+
   try {
-    // Extract user info for authorization
+    // Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 200, headers: UPDATED_SET_HEADERS, body: "" };
+    }
+
+    // --- Authorization ---
     let updatedBy = "system";
     let userGroups = [];
-    
-    // For local testing, skip auth
+
     if (event.requestContext?.authorizer?.claims) {
       updatedBy = event.requestContext.authorizer.claims.sub;
-      userGroups = event.requestContext.authorizer.claims['cognito:groups'] || [];
-      
-      // Check permissions - only cityAuth and admin can update status
-      const canUpdate = userGroups.includes('cityAuth') || userGroups.includes('admin');
+
+      userGroups =
+        event.requestContext.authorizer.claims["cognito:groups"] || [];
+
+      const canUpdate =
+        userGroups.includes("cityAuth") || userGroups.includes("admin");
       if (!canUpdate) {
         return {
           statusCode: 403,
-          body: JSON.stringify({ error: "Insufficient permissions to update incident status" }),
+          headers: UPDATED_SET_HEADERS,
+          body: JSON.stringify({
+            error: "Insufficient permissions to update incident status",
+          }),
         };
       }
     }
 
     const incidentId = event.pathParameters.id;
+
     const body = JSON.parse(event.body);
-    
-    const validStatuses = ['pending', 'in-progress', 'under-review', 'resolved', 'closed', 'rejected'];
-    
+
+    const validStatuses = [
+      "pending",
+      "in-progress",
+      "under-review",
+      "resolved",
+      "closed",
+      "rejected",
+    ];
+
     if (!body.status || !validStatuses.includes(body.status)) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ 
-          error: "Invalid status", 
-          validStatuses 
-        }),
+        headers: UPDATED_SET_HEADERS,
+        body: JSON.stringify({ error: "Invalid status", validStatuses }),
       };
     }
 
-    // Get current incident to capture previous status
-    const currentIncident = await dynamo.get({
-      TableName: process.env.INCIDENT_TABLE,
-      Key: { incidentId: incidentId }
-    }).promise();
-    
+    // --- Fetch current incident ---
+    const currentIncident = await dynamo.send(
+      new GetCommand({
+        TableName: process.env.INCIDENT_TABLE,
+        Key: {incidentId },
+      })
+    );
+
     if (!currentIncident.Item) {
       return {
         statusCode: 404,
+        headers: UPDATED_SET_HEADERS,
         body: JSON.stringify({ error: "Incident not found" }),
       };
     }
-    
+
     const previousStatus = currentIncident.Item.status;
-    
-    // Update incident status in DynamoDB
+
+    // --- Update incident ---
     const updateParams = {
       TableName: process.env.INCIDENT_TABLE,
-      Key: { incidentId: incidentId },
-      UpdateExpression: "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy",
-      ExpressionAttributeNames: {
-        "#status": "status"
-      },
+      Key: {incidentId },
+      UpdateExpression:
+        "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy" +
+        (body.comments ? ", comments = :comments" : ""),
+      ExpressionAttributeNames: { "#status": "status" },
       ExpressionAttributeValues: {
         ":status": body.status,
         ":updatedAt": new Date().toISOString(),
-        ":updatedBy": updatedBy
+        ":updatedBy": updatedBy,
+        ...(body.comments && { ":comments": body.comments }),
       },
-      ReturnValues: "ALL_NEW"
+      ReturnValues: "ALL_NEW",
     };
-    
-    if (body.comments) {
-      updateParams.UpdateExpression += ", comments = :comments";
-      updateParams.ExpressionAttributeValues[":comments"] = body.comments;
-    }
-    
-    const updateResult = await dynamo.update(updateParams).promise();
-    
-    // Publish status update notification to SNS
-    const notificationData = {
-      incidentId,
-      newStatus: body.status,
-      previousStatus,
-      updatedBy,
-      comments: body.comments || null,
-      timestamp: new Date().toISOString()
-    };
-    
-    await sns.publish({
-      TopicArn: process.env.STATUS_UPDATED_TOPIC,
-      Message: JSON.stringify(notificationData),
-      Subject: `Incident Status Updated: ${incidentId}`
-    }).promise();
+
+    const updateResult = await dynamo.send(new UpdateCommand(updateParams));
+
+    // --- Notify via SNS ---
+    // const notificationData = {
+    //   incidentId,
+    //   newStatus: body.status,
+    //   previousStatus,
+    //   updatedBy,
+    //   comments: body.comments || null,
+    //   timestamp: new Date().toISOString(),
+    // };
+    // console.log("sitting on SNS now")
+    // console.log("Sending notification :", process.env.STATUS_UPDATED_TOPIC);
+    // await sns.send(
+    //   new PublishCommand({
+    //     TopicArn: process.env.STATUS_UPDATED_TOPIC,
+    //     Message: JSON.stringify(notificationData),
+    //     Subject: `Incident Status Updated: ${incidentId}`,
+    //   })
+    // );
 
     return {
       statusCode: 200,
+      headers: UPDATED_SET_HEADERS,
       body: JSON.stringify({
         message: "Incident status updated successfully",
         incident: updateResult.Attributes,
         previousStatus,
-        newStatus: body.status
+        newStatus: body.status,
       }),
     };
   } catch (err) {
     console.error("Error updating incident status:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ 
+      headers: UPDATED_SET_HEADERS,
+      body: JSON.stringify({
         error: "Something went wrong!",
-        details: err.message 
+        details: err.message,
       }),
     };
   }

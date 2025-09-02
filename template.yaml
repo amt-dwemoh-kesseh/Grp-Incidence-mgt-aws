@@ -623,7 +623,7 @@ Resources:
             Path: /incidents/{id}/status
             Method: PUT
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
   
   SubmitFeedbackFunction:
     Type: AWS::Serverless::Function

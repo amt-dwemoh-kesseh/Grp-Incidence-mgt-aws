@@ -119,7 +119,7 @@ Resources:
         PointInTimeRecoveryEnabled: true
         RecoveryPeriodInDays: 35
       AttributeDefinitions:
-      - AttributeName: id
+      - AttributeName: incidentId
         AttributeType: S
       - AttributeName: category
         AttributeType: S
@@ -136,14 +136,14 @@ Resources:
       - AttributeName: severity
         AttributeType: S
       KeySchema:
-      - AttributeName: id
+      - AttributeName: incidentId
         KeyType: HASH
       GlobalSecondaryIndexes:
       - IndexName: ByStatusIndex
         KeySchema:
         - AttributeName: status
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -151,7 +151,7 @@ Resources:
         KeySchema:
         - AttributeName: severity
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -159,7 +159,7 @@ Resources:
         KeySchema:
         - AttributeName: category
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -167,7 +167,7 @@ Resources:
         KeySchema:
         - AttributeName: reportedBy
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -175,7 +175,7 @@ Resources:
         KeySchema:
         - AttributeName: assignedTo
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -183,7 +183,7 @@ Resources:
         KeySchema:
         - AttributeName: region
           KeyType: HASH
-        - AttributeName: id
+        - AttributeName: incidentId
           KeyType: RANGE
         Projection:
           ProjectionType: ALL
@@ -362,7 +362,7 @@ Resources:
   GetUploadUrlsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://sam-artifacts-dev-kesse/398871965366668f4aebf990f64f4397
+      CodeUri: s3://sam-artifacts-dev-kesse/9e5f1cbfd5bdb7366ca2933b33fcdd3d
       Handler: getUploadUrls.handler
       Runtime:
         Ref: NodeRuntime
@@ -385,7 +385,7 @@ Resources:
   CreateIncidentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://sam-artifacts-dev-kesse/398871965366668f4aebf990f64f4397
+      CodeUri: s3://sam-artifacts-dev-kesse/9e5f1cbfd5bdb7366ca2933b33fcdd3d
       Handler: createIncident.handler
       Runtime:
         Ref: NodeRuntime
@@ -628,7 +628,7 @@ Resources:
   GetMyIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://sam-artifacts-dev-kesse/398871965366668f4aebf990f64f4397
+      CodeUri: s3://sam-artifacts-dev-kesse/9e5f1cbfd5bdb7366ca2933b33fcdd3d
       Handler: getMyIncidents.handler
       Runtime:
         Ref: NodeRuntime
@@ -657,7 +657,7 @@ Resources:
   ListIncidentsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://sam-artifacts-dev-kesse/398871965366668f4aebf990f64f4397
+      CodeUri: s3://sam-artifacts-dev-kesse/9e5f1cbfd5bdb7366ca2933b33fcdd3d
       Handler: listIncidents.handler
       Runtime:
         Ref: NodeRuntime
@@ -686,7 +686,7 @@ Resources:
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://sam-artifacts-dev-kesse/398871965366668f4aebf990f64f4397
+      CodeUri: s3://sam-artifacts-dev-kesse/9e5f1cbfd5bdb7366ca2933b33fcdd3d
       Handler: updateIncidentStatus.handler
       Runtime:
         Ref: NodeRuntime
