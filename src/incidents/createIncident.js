@@ -2,6 +2,11 @@ const { v4: uuidv4 } = require("uuid");
 const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
+const {
+  DynamoDBDocumentClient,
+  PutCommand,
+  GetCommand,
+} = require("@aws-sdk/lib-dynamodb");
 
 let CORS_HEADERS = {
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
@@ -11,16 +16,17 @@ let CORS_HEADERS = {
 // Initialize SDK clients inside handler to avoid cold-start timeout issues
 
 exports.handler = async (event) => {
+  const headers = Object.fromEntries(
+    Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
+  );
+  const client_origin = headers.origin || "*"; // fallback to '*' if missing
+
+  const UPDATED_SET_HEADERS = {
+    ...CORS_HEADERS,
+    "Access-Control-Allow-Origin": client_origin,
+  };
+
   try {
-    let client_origin = event.headers.Origin || event.headers.origin;
-    console.log("Client origin:", client_origin);
-
-
-    const UPDATED_SET_HEADERS = {
-      ...CORS_HEADERS,
-      "Access-Control-Allow-Origin": client_origin,
-    };
-    
     // Handle preflight CORS
     if (event.httpMethod === "OPTIONS") {
       return {
@@ -37,6 +43,8 @@ exports.handler = async (event) => {
         socketTimeout: 5000,
       }),
     });
+
+    const docClient = DynamoDBDocumentClient.from(dynamo);
 
     const sns = new SNSClient({
       region: process.env.AWS_REGION || "eu-central-1",
@@ -127,16 +135,16 @@ exports.handler = async (event) => {
     const incidentId = uuidv4();
 
     const incident = {
-      incidentId: { S: incidentId },
-      userId: { S: userId },
-      title: { S: body.title },
-      description: { S: body.description },
-      status: { S: "pending" },
-      severity: { S: body.severity || "medium" },
-      category: { S: body.category || "general" },
-      location: body.location ? { S: body.location } : { NULL: true },
-      createdAt: { S: new Date().toISOString() },
-      imageUrls: { L: imageUrls.map((url) => ({ S: url })) },
+      incidentId,
+      userId,
+      title: body.title,
+      description: body.description,
+      status: "pending",
+      severity: body.severity || "medium",
+      category: body.category || "general",
+      location: body.location || null,
+      createdAt: new Date().toISOString(),
+      imageUrls,
     };
 
     // Save to DynamoDB
@@ -144,8 +152,8 @@ exports.handler = async (event) => {
     if (!process.env.INCIDENT_TABLE) {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
-    await dynamo.send(
-      new PutItemCommand({
+    await docClient.send(
+      new PutCommand({
         TableName: process.env.INCIDENT_TABLE,
         Item: incident,
       })

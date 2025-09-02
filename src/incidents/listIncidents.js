@@ -1,4 +1,5 @@
-const { DynamoDBClient, ScanCommand } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, ScanCommand } = require("@aws-sdk/lib-dynamodb");
 
 let CORS_HEADERS = {
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
@@ -20,7 +21,7 @@ exports.handler = async (event) => {
   try {
     console.log("Client origin:", client_origin);
 
-    const client = new DynamoDBClient({
+    const dynamo = new DynamoDBClient({
       region: process.env.AWS_REGION || "eu-central-1",
       requestHandler:
         new (require("@aws-sdk/node-http-handler").NodeHttpHandler)({
@@ -28,6 +29,8 @@ exports.handler = async (event) => {
           socketTimeout: 5000,
         }),
     });
+
+    const docClient = DynamoDBDocumentClient.from(dynamo);
 
     // Preflight request
     if (event.httpMethod === "OPTIONS") {
@@ -43,7 +46,7 @@ exports.handler = async (event) => {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
 
-    const result = await client.send(new ScanCommand({ TableName: process.env.INCIDENT_TABLE }));
+    const result = await docClient.send(new ScanCommand({ TableName: process.env.INCIDENT_TABLE }));
     console.log("DynamoDB scan completed, found", result.Items.length, "items");
 
     return {
