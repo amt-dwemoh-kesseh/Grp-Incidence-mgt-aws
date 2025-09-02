@@ -584,7 +584,7 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
-            Path: /user
+            Path: /delete
             RestApiId: !Ref ApiGateway
             Method: DELETE
             Auth:
