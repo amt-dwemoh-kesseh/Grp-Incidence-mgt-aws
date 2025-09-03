@@ -18,9 +18,9 @@ CORS_HEADERS = {
 
 def lambda_handler(event, context):
     
-    origin = event['headers'].get('origin')
+    headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
+    origin = headers.get('origin')
     CORS_HEADERS.update({"Access-Control-Allow-Origin": origin})
-    logger.info(f"Received origin: {origin}")
 
     if not is_admin(event):
         logger.warning("Unauthorized access attempt by non-admin user")
