@@ -12,3 +12,6 @@ package.json
 .git
 samconfig.toml
 src/package-lock.json
+src/admin_invite/requirements.txt
+src/custom_message/requirements.txt
+src/list_users/requirements.txt
