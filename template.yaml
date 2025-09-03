@@ -291,6 +291,53 @@ Resources:
         - ClientId: !Ref UserPoolClient
           ProviderName: !GetAtt UserPool.ProviderName
 
+  # SES Configuration for Email Notifications
+  SESConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: incident-notifications
+
+  SESIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: noreply@monitoring-platform.com
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref SESConfigurationSet
+
+  # SNS Topics for notifications
+  IncidentReportedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "incident-reported"
+
+  StatusUpdatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "status-updated"
+
+  # Lambda Functions
+  EmailNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: notifications/emailNotificationHandler.handler
+      Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          FROM_EMAIL: noreply@monitoring-platform.com
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        StatusUpdatedSNS:
+          Type: SNS
+          Properties:
+            Topic: !Ref StatusUpdatedTopic
+
   # Cognito Groups
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -770,6 +817,7 @@ Resources:
               MainBranch: !GetAtt MainBranch.BranchName
           AWS_ACCOUNT_ID: !Sub ${AWS::AccountId}
           REGION: "eu-west-1"
+          INCIDENT_TABLE: !Ref IncidentTable
       Policies:
         - Version: '2012-10-17'
           Statement:
@@ -779,6 +827,8 @@ Resources:
                 - quicksight:GenerateEmbedUrlForAnonymousUser
               Resource:
                 - !Sub "arn:aws:quicksight:eu-west-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
       Events:
         Api:
           Type: Api
@@ -800,14 +850,8 @@ Resources:
         RestrictPublicBuckets: true
 
   # SNS Topics
-  IncidentReportedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: "incident-reported"
-  StatusUpdatedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: "status-updated"
+
+
 
   ################################################## Cognito Backup & Restore #####################################
   CognitoBackupTable:
