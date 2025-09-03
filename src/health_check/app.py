@@ -18,23 +18,19 @@ USER_POOL_ID = os.environ["USER_POOL_ID"]
 SNS_TOPIC_ARN = os.environ["ALERT_TOPIC_ARN"]
 
 def lambda_handler(event, context):
-    """Health check for Cognito User Pool."""
     logger.info(f"Health check started at {datetime.now(timezone.utc).isoformat()}")
 
     try:
-        # Describe the user pool to verify it's operational
         response = cognito.describe_user_pool(UserPoolId=USER_POOL_ID)
-        status = response.get("UserPool", {}).get("Status", "UNKNOWN")
+        user_pool = response.get("UserPool")
 
-        logger.info(f"User pool status: {status}")
-
-        if status != "Active":
-            message = f"⚠️ Cognito User Pool {USER_POOL_ID} is not active! Current status: {status}"
+        if not user_pool:
+            message = f"⚠️ Cognito User Pool {USER_POOL_ID} not found or inaccessible."
             publish_alert(message)
             return {"status": "ALERT", "details": message}
 
         logger.info("✅ Cognito User Pool is healthy")
-        return {"status": "HEALTHY", "details": "User pool is active"}
+        return {"status": "HEALTHY", "details": f"User pool {USER_POOL_ID} is accessible"}
 
     except ClientError as e:
         error_message = (
@@ -46,7 +42,6 @@ def lambda_handler(event, context):
         return {"status": "ERROR", "details": error_message}
 
 def publish_alert(message: str):
-    """Publish alert to SNS topic."""
     try:
         sns.publish(
             TopicArn=SNS_TOPIC_ARN,
