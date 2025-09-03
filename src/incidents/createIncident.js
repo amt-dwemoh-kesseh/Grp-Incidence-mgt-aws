@@ -1,11 +1,10 @@
-const { v4: uuidv4 } = require("uuid");
-const { DynamoDBClient, PutItemCommand } = require("@aws-sdk/client-dynamodb");
+const { randomUUID } = require("crypto");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
 const {
   DynamoDBDocumentClient,
   PutCommand,
-  GetCommand,
 } = require("@aws-sdk/lib-dynamodb");
 
 let CORS_HEADERS = {
@@ -14,7 +13,6 @@ let CORS_HEADERS = {
 };
 
 // Initialize SDK clients inside handler to avoid cold-start timeout issues
-
 exports.handler = async (event) => {
   const headers = Object.fromEntries(
     Object.entries(event.headers || {}).map(([k, v]) => [k.toLowerCase(), v])
@@ -58,26 +56,20 @@ exports.handler = async (event) => {
     let cognitoUserId;
     let userEmail;
 
-    // TODO: Add JWT decode or authorizer claims if needed
     if (event.requestContext?.authorizer?.claims) {
       cognitoUserId = event.requestContext.authorizer.claims.sub;
       userEmail = event.requestContext.authorizer.claims.email;
-    }
-    // Fallback: decode JWT from Authorization header (local development)
-    else if (event.headers?.Authorization || event.headers?.authorization) {
+    } else if (event.headers?.Authorization || event.headers?.authorization) {
       const authHeader =
         event.headers.Authorization || event.headers.authorization;
       const token = authHeader.replace("Bearer ", "");
-
       try {
-        // Decode JWT payload (base64 decode the middle part)
         const payload = JSON.parse(
           Buffer.from(token.split(".")[1], "base64").toString()
         );
-
         cognitoUserId = payload.sub;
         userEmail = payload.email;
-      } catch (error) {
+      } catch {
         return {
           statusCode: 401,
           headers: UPDATED_SET_HEADERS,
@@ -94,7 +86,6 @@ exports.handler = async (event) => {
       };
     }
 
-    // Parse and validate input
     const body = JSON.parse(event.body);
 
     if (!body.title || !body.description) {
@@ -107,7 +98,6 @@ exports.handler = async (event) => {
 
     const userId = cognitoUserId;
 
-    // Validate image URLs if provided
     let imageUrls = [];
     if (body.imageUrls && Array.isArray(body.imageUrls)) {
       for (const imageUrl of body.imageUrls) {
@@ -119,7 +109,7 @@ exports.handler = async (event) => {
           };
         }
         try {
-          new URL(imageUrl); // basic URL validation
+          new URL(imageUrl);
           imageUrls.push(imageUrl);
         } catch {
           return {
@@ -131,8 +121,8 @@ exports.handler = async (event) => {
       }
     }
 
-    // Create incident item
-    const incidentId = uuidv4();
+    // Create incident item using crypto.randomUUID()
+    const incidentId = randomUUID();
 
     const incident = {
       incidentId,
@@ -147,8 +137,6 @@ exports.handler = async (event) => {
       imageUrls,
     };
 
-    // Save to DynamoDB
-
     if (!process.env.INCIDENT_TABLE) {
       throw new Error("INCIDENT_TABLE environment variable not set");
     }
@@ -159,7 +147,6 @@ exports.handler = async (event) => {
       })
     );
 
-    // Publish notification to SNS
     if (process.env.INCIDENT_REPORTED_TOPIC) {
       const notificationData = {
         incidentId,
