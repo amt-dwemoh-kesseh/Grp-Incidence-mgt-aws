@@ -15,7 +15,7 @@ USER_POOL_ID = os.environ.get("USER_POOL_ID")
 CORS_HEADERS = {
     "Access-Control-Allow-Methods": "OPTIONS,POST,DELETE,GET",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    }
+}
 
 def lambda_handler(event, context):
     
