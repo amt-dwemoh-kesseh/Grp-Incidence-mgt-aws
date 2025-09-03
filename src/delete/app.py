@@ -11,7 +11,6 @@ logger.setLevel(logging.INFO)
 cognito = boto3.client("cognito-idp")
 USER_POOL_ID = os.environ.get("USER_POOL_ID")
 
-
 CORS_HEADERS = {
     "Access-Control-Allow-Methods": "OPTIONS,POST,DELETE,GET",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
@@ -21,7 +20,8 @@ def lambda_handler(event, context):
     
     origin = event['headers'].get('origin')
     CORS_HEADERS.update({"Access-Control-Allow-Origin": origin})
-    
+    logger.info(f"Received origin: {origin}")
+
     if not is_admin(event):
         logger.warning("Unauthorized access attempt by non-admin user")
         
