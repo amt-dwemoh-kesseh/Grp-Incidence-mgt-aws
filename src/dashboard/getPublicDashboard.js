@@ -12,25 +12,26 @@ exports.handler = async (event) => {
 
     if (!isLocal) {
       try {
-        const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-        const { DynamoDBDocumentClient, ScanCommand } = require("@aws-sdk/lib-dynamodb");        const client = new DynamoDBClient({
+        const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+        const { DynamoDBDocumentClient, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+        
+        const dynamo = new DynamoDBClient({
           region: process.env.AWS_REGION || 'eu-central-1'
         });
-
         const docClient = DynamoDBDocumentClient.from(dynamo);
+        
         const params = { TableName: process.env.INCIDENT_TABLE };
-        const result = await docClient.send(new ScanCommand({ TableName: process.env.INCIDENT_TABLE }));
-        console.log("DynamoDB scan completed, found", result.Items.length, "items");
+        const result = await docClient.send(new ScanCommand(params));
         
         dbStats.totalItems = result.Items ? result.Items.length : 0;
         dbStats.totalPending = result.Items ? result.Items.filter(item => 
-          item.status && item.status.S === 'pending'
+          item.status === 'PENDING'
         ).length : 0;
         dbStats.totalInReview = result.Items ? result.Items.filter(item => 
-          item.status && item.status.S === 'in-review'
+          item.status === 'IN_PROGRESS'
         ).length : 0;
         dbStats.totalResolved = result.Items ? result.Items.filter(item => 
-          item.status && item.status.S === 'resolved'
+          item.status === 'RESOLVED'
         ).length : 0;
         dbStats.items = result.Items ? result.Items.slice(0, 10) : [];
         
@@ -44,9 +45,9 @@ exports.handler = async (event) => {
         totalInReview: 8,
         totalResolved: 19,
         items: [
-          { incidentId: 'INC-001', title: 'Road Pothole on Main St', status: 'pending', category: 'infrastructure' },
-          { incidentId: 'INC-002', title: 'Broken Streetlight', status: 'in-review', category: 'utilities' },
-          { incidentId: 'INC-003', title: 'Water Leak', status: 'resolved', category: 'utilities' }
+          { incidentId: 'INC-001', title: 'Road Pothole on Main St', status: 'PENDING', category: 'INFRASTRUCTURE' },
+          { incidentId: 'INC-002', title: 'Broken Streetlight', status: 'IN_PROGRESS', category: 'UTILITIES' },
+          { incidentId: 'INC-003', title: 'Water Leak', status: 'RESOLVED', category: 'UTILITIES' }
         ]
       };
     }
