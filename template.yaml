@@ -681,7 +681,7 @@ Resources:
             Path: /incidents
             Method: GET
             Auth:
-              Authorizer: NONE
+              Authorizer: CognitoAuthorizer
 
   UpdateIncidentStatusFunction:
     Type: AWS::Serverless::Function
