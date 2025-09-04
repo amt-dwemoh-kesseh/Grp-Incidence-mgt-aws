@@ -2,6 +2,7 @@
   "name": "dashboard-functions",
   "version": "1.0.0",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.879.0",
     "aws-sdk": "^2.1490.0"
   }
 }
