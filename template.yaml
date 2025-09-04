@@ -457,7 +457,7 @@ Resources:
     Properties:
       LayerName: IncidentReportingAuthUtils
       Description: Shared authorization utilities for admin-only Lambdas
-      ContentUri: src/layers/auth_utils/
+      ContentUri: src/layers/
       CompatibleRuntimes:
         - !Ref PythonRuntime
 
@@ -603,40 +603,6 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
-
-  CognitoDeleteUserFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: CognitoDeleteUserFunction
-      Description: Deletes a user from the Cognito User Pool
-      Runtime: !Ref PythonRuntime
-      Handler: app.lambda_handler
-      CodeUri: src/delete/
-      Timeout: 30
-      MemorySize: 128
-      Environment:
-        Variables:
-          USER_POOL_ID: !Ref UserPool
-      Layers:
-        - !Ref AuthUtilsLayer
-      Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminDeleteUser
-                - cognito-idp:ListUsers
-              Resource: !GetAtt UserPool.Arn
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /delete
-            RestApiId: !Ref ApiGateway
-            Method: POST
-            Auth:
-              Authorizer: CognitoAuthorizer
-  
   DeleteUserFunction:
     Type: AWS::Serverless::Function
     Properties:
