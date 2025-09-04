@@ -782,7 +782,7 @@ Resources:
             - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
               MainBranch: !GetAtt MainBranch.BranchName
           AWS_ACCOUNT_ID: !Sub ${AWS::AccountId}
-          REGION: "eu-west-1"
+          REGION: "eu-central-1"
           INCIDENT_TABLE: !Ref IncidentTable
       Policies:
         - Version: '2012-10-17'
@@ -792,7 +792,7 @@ Resources:
                 - quicksight:GetDashboardEmbedUrl
                 - quicksight:GenerateEmbedUrlForAnonymousUser
               Resource:
-                - !Sub "arn:aws:quicksight:eu-west-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
+                - !Sub "arn:aws:quicksight:eu-central-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
         - DynamoDBReadPolicy:
             TableName: !Ref IncidentTable
       Events:
