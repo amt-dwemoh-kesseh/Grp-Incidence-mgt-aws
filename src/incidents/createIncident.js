@@ -2,10 +2,7 @@ const { randomUUID } = require("crypto");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
 const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
-const {
-  DynamoDBDocumentClient,
-  PutCommand,
-} = require("@aws-sdk/lib-dynamodb");
+const { DynamoDBDocumentClient, PutCommand } = require("@aws-sdk/lib-dynamodb");
 
 let CORS_HEADERS = {
   "Access-Control-Allow-Methods": "OPTIONS, POST, GET, PUT",
@@ -55,6 +52,9 @@ exports.handler = async (event) => {
     // Extract user ID (default for local testing)
     let cognitoUserId;
     let userEmail;
+    let reporter_region;
+    let report_city;
+    let reporter;
 
     if (event.requestContext?.authorizer?.claims) {
       cognitoUserId = event.requestContext.authorizer.claims.sub;
@@ -63,12 +63,16 @@ exports.handler = async (event) => {
       const authHeader =
         event.headers.Authorization || event.headers.authorization;
       const token = authHeader.replace("Bearer ", "");
+      
       try {
         const payload = JSON.parse(
           Buffer.from(token.split(".")[1], "base64").toString()
         );
         cognitoUserId = payload.sub;
         userEmail = payload.email;
+        reporter_region = payload["custom:region"] || "unknown";
+        report_city = payload["custom:city"] || "unknown";
+        reporter = payload["cognito:username"] || "unknown";
       } catch {
         return {
           statusCode: 401,
@@ -127,13 +131,18 @@ exports.handler = async (event) => {
     const incident = {
       incidentId,
       userId,
+      reporter,
+      reporter_region,
+      report_city,
+      userEmail,
       title: body.title,
       description: body.description,
-      status: "pending",
+      status: "PENDING",
       severity: body.severity || "medium",
-      category: body.category || "general",
+      category: body.category || "OTHER",
       location: body.location || null,
       createdAt: new Date().toISOString(),
+      assignedTo: null,
       imageUrls,
     };
 

@@ -4,7 +4,7 @@ const {
   GetCommand,
   UpdateCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const { SNSClient } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
 
 const CORS_HEADERS = {
@@ -47,13 +47,13 @@ exports.handler = async (event) => {
     let userGroups = [];
 
     if (event.requestContext?.authorizer?.claims) {
-      updatedBy = event.requestContext.authorizer.claims.sub;
+      updatedBy = event.requestContext.authorizer.claims.name;
 
       userGroups =
         event.requestContext.authorizer.claims["cognito:groups"] || [];
 
       const canUpdate =
-        userGroups.includes("cityAuth") || userGroups.includes("admin");
+        userGroups.includes("CityOfficial") || userGroups.includes("Admin");
       if (!canUpdate) {
         return {
           statusCode: 403,
@@ -63,6 +63,35 @@ exports.handler = async (event) => {
           }),
         };
       }
+    } else if (event.headers?.Authorization || event.headers?.authorization) {
+      const authHeader =
+        event.headers.Authorization || event.headers.authorization;
+      const token = authHeader.replace("Bearer ", "");
+
+      try {
+        const payload = JSON.parse(
+          Buffer.from(token.split(".")[1], "base64").toString()
+        );
+        updatedBy = payload.name || payload["cognito:username"];
+        userGroups = payload["cognito:groups"] || [];
+        const canUpdate =
+          userGroups.includes("CityOfficial") || userGroups.includes("Admin");
+        if (!canUpdate) {
+          return {
+            statusCode: 403,
+            headers: UPDATED_SET_HEADERS,
+            body: JSON.stringify({
+              error: "Insufficient permissions to update incident status",
+            }),
+          };
+        }
+      } catch {
+        return {
+          statusCode: 401,
+          headers: UPDATED_SET_HEADERS,
+          body: JSON.stringify({ error: "Invalid JWT token" }),
+        };
+      }
     }
 
     const incidentId = event.pathParameters.id;
@@ -70,12 +99,13 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body);
 
     const validStatuses = [
-      "pending",
-      "in-progress",
-      "under-review",
-      "resolved",
-      "closed",
-      "rejected",
+      "QUEUED",
+      "PENDING",
+      "REPORTED",
+      "IN_PROGRESS",
+      "RESOLVED",
+      "CLOSED",
+      "CANCELLED",
     ];
 
     if (!body.status || !validStatuses.includes(body.status)) {
@@ -90,7 +120,7 @@ exports.handler = async (event) => {
     const currentIncident = await dynamo.send(
       new GetCommand({
         TableName: process.env.INCIDENT_TABLE,
-        Key: {incidentId },
+        Key: { incidentId },
       })
     );
 
@@ -107,7 +137,7 @@ exports.handler = async (event) => {
     // --- Update incident ---
     const updateParams = {
       TableName: process.env.INCIDENT_TABLE,
-      Key: {incidentId },
+      Key: { incidentId },
       UpdateExpression:
         "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy" +
         (body.comments ? ", comments = :comments" : ""),
