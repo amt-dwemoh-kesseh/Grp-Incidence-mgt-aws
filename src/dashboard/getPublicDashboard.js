@@ -4,7 +4,10 @@ exports.handler = async (event) => {
     console.log('Environment variables:', {
       AWS_SAM_LOCAL: process.env.AWS_SAM_LOCAL,
       AWS_REGION: process.env.AWS_REGION,
-      QUICKSIGHT_DASHBOARD_ID: process.env.QUICKSIGHT_DASHBOARD_ID
+      QUICKSIGHT_DASHBOARD_ID: process.env.QUICKSIGHT_DASHBOARD_ID,
+      INCIDENT_TABLE: process.env.INCIDENT_TABLE,
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ? 'SET' : 'NOT SET',
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET'
     });
 
     // Look into region (region of dashboard might be diff from region of lambda)
@@ -21,9 +24,47 @@ exports.handler = async (event) => {
 
     console.log('Is local environment:', isLocal);
 
+    // Get database statistics
+    let dbStats = {
+      totalItems: 0,
+      totalPending: 0,
+      items: []
+    };
+
+    if (!isLocal) {
+      try {
+        const { DynamoDBClient, ScanCommand } = require('@aws-sdk/client-dynamodb');
+        const client = new DynamoDBClient({
+          region: process.env.AWS_REGION || 'eu-central-1'
+        });
+        
+        const params = { TableName: process.env.INCIDENT_TABLE };
+        const result = await client.send(new ScanCommand(params));
+        
+        dbStats.totalItems = result.Items ? result.Items.length : 0;
+        dbStats.totalPending = result.Items ? result.Items.filter(item => 
+          item.status && item.status.S === 'pending'
+        ).length : 0;
+        dbStats.items = result.Items ? result.Items.slice(0, 10) : [];
+        
+      } catch (dbError) {
+        console.error('Database query error:', dbError);
+      }
+    } else {
+      // Mock data for local development
+      dbStats = {
+        totalItems: 42,
+        totalPending: 15,
+        items: [
+          { incidentId: 'INC-001', title: 'Road Pothole on Main St', status: 'pending', category: 'infrastructure' },
+          { incidentId: 'INC-002', title: 'Broken Streetlight', status: 'in-progress', category: 'utilities' },
+          { incidentId: 'INC-003', title: 'Water Leak', status: 'resolved', category: 'utilities' }
+        ]
+      };
+    }
+
     if (isLocal) {
       console.log('Returning local development response');
-      // Return mock data for local development
       return {
         statusCode: 200,
         headers: {
@@ -33,7 +74,8 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           embedUrl: 'https://eu-west-1.quicksight.aws.amazon.com/sn/account/GroupOne/dashboards/9824a03f-fef9-4507-b432-bdd619b87d96',
           message: 'Local development mode - showing direct dashboard URL',
-          environment: 'local'
+          environment: 'local',
+          statistics: dbStats
         })
       };
     }
@@ -66,7 +108,8 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         embedUrl: result.EmbedUrl,
-        environment: 'production'
+        environment: 'production',
+        statistics: dbStats
       })
     };
 
