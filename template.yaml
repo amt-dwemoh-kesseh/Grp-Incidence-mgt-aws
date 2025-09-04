@@ -410,7 +410,7 @@ Resources:
     Properties:
       LayerName: IncidentReportingAuthUtils
       Description: Shared authorization utilities for admin-only Lambdas
-      ContentUri: src/layers/auth_utils/
+      ContentUri: src/layers/
       CompatibleRuntimes:
         - !Ref PythonRuntime
 
