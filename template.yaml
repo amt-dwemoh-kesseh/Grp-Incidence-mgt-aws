@@ -291,6 +291,53 @@ Resources:
         - ClientId: !Ref UserPoolClient
           ProviderName: !GetAtt UserPool.ProviderName
 
+  # SES Configuration for Email Notifications
+  SESConfigurationSet:
+    Type: AWS::SES::ConfigurationSet
+    Properties:
+      Name: incident-notifications
+
+  SESIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: noreply@monitoring-platform.com
+      ConfigurationSetAttributes:
+        ConfigurationSetName: !Ref SESConfigurationSet
+
+  # SNS Topics for notifications
+  IncidentReportedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "incident-reported"
+
+  StatusUpdatedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: "status-updated"
+
+  # Lambda Functions
+  EmailNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: notifications/emailNotificationHandler.handler
+      Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          FROM_EMAIL: noreply@monitoring-platform.com
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: "*"
+      Events:
+        StatusUpdatedSNS:
+          Type: SNS
+          Properties:
+            Topic: !Ref StatusUpdatedTopic
+
   # Cognito Groups
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -410,7 +457,7 @@ Resources:
     Properties:
       LayerName: IncidentReportingAuthUtils
       Description: Shared authorization utilities for admin-only Lambdas
-      ContentUri: src/layers/auth_utils/
+      ContentUri: src/layers/
       CompatibleRuntimes:
         - !Ref PythonRuntime
 
@@ -556,13 +603,12 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
-
-  CognitoDeleteUserFunction:
+  DeleteUserFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: CognitoDeleteUserFunction
+      FunctionName: DeleteUserFunction
       Description: Deletes a user from the Cognito User Pool
-      Runtime: python3.12
+      Runtime: !Ref PythonRuntime
       Handler: app.lambda_handler
       CodeUri: src/delete/
       Timeout: 30
@@ -584,9 +630,9 @@ Resources:
         ApiEvent:
           Type: Api
           Properties:
-            Path: /delete
+            Path: /users
             RestApiId: !Ref ApiGateway
-            Method: POST
+            Method: DELETE
             Auth:
               Authorizer: CognitoAuthorizer
 
@@ -725,27 +771,10 @@ Resources:
       Runtime: !Ref NodeRuntime
       Environment:
         Variables:
-          QUICKSIGHT_DASHBOARD_ID: "9824a03f-fef9-4507-b432-bdd619b87d96"
-          AMPLIFY_LOCAL_DOMAIN: !Ref FrontendLocalDomain
-          AMPLIFY_DEV_DOMAIN: !Sub 
-            - 'https://${DevBranch}.${DefaultDomain}'
-            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
-              DevBranch: !GetAtt DevBranch.BranchName
-          AMPLIFY_PROD_DOMAIN: !Sub 
-            - 'https://${MainBranch}.${DefaultDomain}'
-            - DefaultDomain: !GetAtt AmplifyApp.DefaultDomain
-              MainBranch: !GetAtt MainBranch.BranchName
-          # AWS_ACCOUNT_ID: "GroupOne"
-          REGION: "eu-west-1"
+          INCIDENT_TABLE: !Ref IncidentTable
       Policies:
-        - Version: '2012-10-17'
-          Statement:
-            - Effect: Allow
-              Action:
-                - quicksight:GetDashboardEmbedUrl
-                - quicksight:GenerateEmbedUrlForAnonymousUser
-              Resource:
-                - !Sub "arn:aws:quicksight:eu-west-1:605134436600:dashboard/9824a03f-fef9-4507-b432-bdd619b87d96"
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
       Events:
         Api:
           Type: Api
@@ -767,14 +796,8 @@ Resources:
         RestrictPublicBuckets: true
 
   # SNS Topics
-  IncidentReportedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: "incident-reported"
-  StatusUpdatedTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: "status-updated"
+
+
 
   ################################################## Cognito Backup & Restore #####################################
   CognitoBackupTable:

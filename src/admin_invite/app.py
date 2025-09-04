@@ -58,7 +58,7 @@ def lambda_handler(event, context):
                 {"Name": "name", "Value": name},
                 {"Name": "custom:region", "Value": region},
                 {"Name": "custom:city", "Value": city},
-                {"Name": "custom:telephone", "Value": telephone},
+                {"Name": "phone_number", "Value": telephone},
                 {"Name": "email_verified", "Value": "true"}
             ]
         )
