@@ -25,7 +25,7 @@ exports.handler = async (event) => {
         
         dbStats.totalItems = result.Items ? result.Items.length : 0;
         dbStats.totalPending = result.Items ? result.Items.filter(item => 
-          item.status === 'PENDING'
+          item.status === 'pending'
         ).length : 0;
         dbStats.totalInReview = result.Items ? result.Items.filter(item => 
           item.status === 'IN_PROGRESS'
@@ -42,7 +42,7 @@ exports.handler = async (event) => {
       dbStats = {
         totalItems: 42,
         totalPending: 15,
-        totalInReview: 8,
+        totalInProgress: 8,
         totalResolved: 19,
         items: [
           { incidentId: 'INC-001', title: 'Road Pothole on Main St', status: 'PENDING', category: 'INFRASTRUCTURE' },
