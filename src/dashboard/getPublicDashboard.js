@@ -33,7 +33,9 @@ exports.handler = async (event) => {
         dbStats.totalResolved = result.Items ? result.Items.filter(item => 
           item.status === 'RESOLVED'
         ).length : 0;
-        dbStats.items = result.Items ? result.Items.slice(0, 10) : [];
+        dbStats.items = result.Items ? result.Items
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 6) : [];
         
       } catch (dbError) {
         console.error('Database query error:', dbError);
