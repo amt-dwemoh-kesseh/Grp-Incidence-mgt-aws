@@ -137,7 +137,6 @@ exports.handler = async (event) => {
       reporter,
       reporter_region,
       report_city,
-      userEmail,
       createdBy: userName || "Unknown User",
       title: body.title,
       description: body.description,

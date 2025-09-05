@@ -25,7 +25,7 @@ exports.handler = async (event) => {
         
         dbStats.totalItems = result.Items ? result.Items.length : 0;
         dbStats.totalPending = result.Items ? result.Items.filter(item => 
-          item.status === 'pending'
+          item.status === 'pending' || item.status === 'PENDING'
         ).length : 0;
         dbStats.totalInReview = result.Items ? result.Items.filter(item => 
           item.status === 'IN_PROGRESS'

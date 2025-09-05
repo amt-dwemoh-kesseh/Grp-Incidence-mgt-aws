@@ -124,9 +124,9 @@ exports.handler = async (event) => {
           body: JSON.stringify({ error: "Region not found in user profile" }),
         };
       }
-      filterExprs.push("#region = :region");
-      exprAttrNames["#region"] = "region";
-      exprAttrValues[":region"] = userRegion;
+      filterExprs.push("#reporter_region = :reporter_region");
+      exprAttrNames["#reporter_region"] = "reporter_region";
+      exprAttrValues[":reporter_region"] = userRegion;
     } else {
       // regular user → only own incidents
       filterExprs.push("#userId = :userId");
