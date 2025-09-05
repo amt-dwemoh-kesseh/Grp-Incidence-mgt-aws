@@ -55,10 +55,12 @@ exports.handler = async (event) => {
     let reporter_region;
     let report_city;
     let reporter;
+    let userName;
 
     if (event.requestContext?.authorizer?.claims) {
       cognitoUserId = event.requestContext.authorizer.claims.sub;
       userEmail = event.requestContext.authorizer.claims.email;
+      userName = event.requestContext.authorizer.claims.name;
     } else if (event.headers?.Authorization || event.headers?.authorization) {
       const authHeader =
         event.headers.Authorization || event.headers.authorization;
@@ -70,6 +72,7 @@ exports.handler = async (event) => {
         );
         cognitoUserId = payload.sub;
         userEmail = payload.email;
+        userName = payload.name;
         reporter_region = payload["custom:region"] || "unknown";
         report_city = payload["custom:city"] || "unknown";
         reporter = payload["cognito:username"] || "unknown";
@@ -135,6 +138,7 @@ exports.handler = async (event) => {
       reporter_region,
       report_city,
       userEmail,
+      createdBy: userName || "Unknown User",
       title: body.title,
       description: body.description,
       status: "PENDING",
@@ -142,7 +146,6 @@ exports.handler = async (event) => {
       category: body.category || "OTHER",
       location: body.location || null,
       createdAt: new Date().toISOString(),
-      assignedTo: null,
       imageUrls,
     };
 
