@@ -61,6 +61,9 @@ exports.handler = async (event) => {
       cognitoUserId = event.requestContext.authorizer.claims.sub;
       userEmail = event.requestContext.authorizer.claims.email;
       userName = event.requestContext.authorizer.claims.name;
+      reporter_region = event.requestContext.authorizer.claims["custom:region"] || "unknown";
+      report_city = event.requestContext.authorizer.claims["custom:city"] || "unknown";
+      reporter = event.requestContext.authorizer.claims["cognito:username"] || "unknown";
     } else if (event.headers?.Authorization || event.headers?.authorization) {
       const authHeader =
         event.headers.Authorization || event.headers.authorization;
