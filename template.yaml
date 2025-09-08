@@ -403,6 +403,10 @@ Resources:
       Policies:
         - S3WritePolicy:
             BucketName: !Ref IncidentAttachmentBucket
+      Environment:
+        Variables:
+          ATTACHMENT_BUCKET: !Ref IncidentAttachmentBucket
+          ENV: !Ref Env
       Events:
         Api:
           Type: Api
