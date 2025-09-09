@@ -15,11 +15,7 @@ const CORS_HEADERS = {
 
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 200,
-      headers: CORS_HEADERS,
-      body: "",
-    };
+    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
   }
 
   try {
@@ -44,12 +40,7 @@ exports.handler = async (event) => {
     const uploadUrls = [];
 
     for (const file of body.files) {
-      // file should now be an object: { name, type }
-      if (
-        !file ||
-        typeof file.name !== "string" ||
-        typeof file.type !== "string"
-      ) {
+      if (!file || typeof file.name !== "string" || typeof file.type !== "string") {
         return {
           statusCode: 400,
           headers: CORS_HEADERS,
@@ -59,7 +50,7 @@ exports.handler = async (event) => {
         };
       }
 
-      // Validate file extension (images only)
+      // Validate file extension
       const fileExtension = path.extname(file.name).toLowerCase();
       const allowedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
 
@@ -73,21 +64,18 @@ exports.handler = async (event) => {
         };
       }
 
-      // Generate unique filename
+      // Unique filename
       const uniqueFilename = `${randomUUID()}${fileExtension}`;
       const s3Key = `temp-uploads/${uniqueFilename}`;
 
-      // Generate signed URL with the *exact MIME type* from frontend
+      // 👇 Sign URL with frontend-provided MIME type
       const command = new PutObjectCommand({
         Bucket: process.env.ATTACHMENT_BUCKET,
         Key: s3Key,
-        ContentType: file.type, // 👈 trust frontend-provided MIME type
+        ContentType: file.type,
       });
 
-      const uploadUrl = await getSignedUrl(s3Client, command, {
-        expiresIn: 300,
-      });
-
+      const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
       const fileUrl = `https://${process.env.ATTACHMENT_BUCKET}.s3.${
         process.env.AWS_REGION || "us-east-1"
       }.amazonaws.com/${s3Key}`;
@@ -112,19 +100,11 @@ exports.handler = async (event) => {
   } catch (error) {
     console.error("Error generating upload URLs:", error);
 
-    let statusCode = 500;
-    let errorMessage = "Failed to generate upload URLs";
-
-    if (error instanceof SyntaxError && error.message.includes("JSON")) {
-      statusCode = 400;
-      errorMessage = "Invalid JSON in request body";
-    }
-
     return {
-      statusCode,
+      statusCode: 500,
       headers: CORS_HEADERS,
       body: JSON.stringify({
-        error: errorMessage,
+        error: "Failed to generate upload URLs",
         details: error.message,
       }),
     };
