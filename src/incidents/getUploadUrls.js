@@ -13,7 +13,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
 
-exports.handler = async (event) =>{
+exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -43,17 +43,24 @@ exports.handler = async (event) =>{
 
     const uploadUrls = [];
 
-    for (const filename of body.files) {
-      if (!filename || typeof filename !== "string") {
+    for (const file of body.files) {
+      // file should now be an object: { name, type }
+      if (
+        !file ||
+        typeof file.name !== "string" ||
+        typeof file.type !== "string"
+      ) {
         return {
           statusCode: 400,
           headers: CORS_HEADERS,
-          body: JSON.stringify({ error: "Invalid filename provided" }),
+          body: JSON.stringify({
+            error: "Each file must include { name, type }",
+          }),
         };
       }
 
       // Validate file extension (images only)
-      const fileExtension = path.extname(filename).toLowerCase();
+      const fileExtension = path.extname(file.name).toLowerCase();
       const allowedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
 
       if (!allowedExtensions.includes(fileExtension)) {
@@ -61,9 +68,7 @@ exports.handler = async (event) =>{
           statusCode: 400,
           headers: CORS_HEADERS,
           body: JSON.stringify({
-            error: `Invalid file type. Allowed: ${allowedExtensions.join(
-              ", "
-            )}`,
+            error: `Invalid file type. Allowed: ${allowedExtensions.join(", ")}`,
           }),
         };
       }
@@ -72,11 +77,11 @@ exports.handler = async (event) =>{
       const uniqueFilename = `${randomUUID()}${fileExtension}`;
       const s3Key = `temp-uploads/${uniqueFilename}`;
 
-      // Generate signed URL
+      // Generate signed URL with the *exact MIME type* from frontend
       const command = new PutObjectCommand({
         Bucket: process.env.ATTACHMENT_BUCKET,
         Key: s3Key,
-        ContentType: `image/${fileExtension.slice(1)}`,
+        ContentType: file.type, // 👈 trust frontend-provided MIME type
       });
 
       const uploadUrl = await getSignedUrl(s3Client, command, {
@@ -88,7 +93,7 @@ exports.handler = async (event) =>{
       }.amazonaws.com/${s3Key}`;
 
       uploadUrls.push({
-        originalFilename: filename,
+        originalFilename: file.name,
         uploadUrl,
         fileUrl,
         s3Key,
