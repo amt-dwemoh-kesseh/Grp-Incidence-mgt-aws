@@ -66,7 +66,7 @@ def lambda_handler(event, context):
                 "user_id": username,
                 "name": attributes.get("name"),
                 "email": attributes.get("email"),
-                "phone_number": attributes.get("phone_number"),
+                # "phone_number": attributes.get("phone_number"),
                 "region": attributes.get("custom:region"),
                 "city": attributes.get("custom:city"),
                 "role": role,
