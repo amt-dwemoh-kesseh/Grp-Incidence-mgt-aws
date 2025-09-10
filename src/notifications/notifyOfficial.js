@@ -1,6 +1,11 @@
-const AWS = require("aws-sdk");
-const sns = new AWS.SNS();
-const dynamo = new AWS.DynamoDB.DocumentClient();
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, GetCommand } = require("@aws-sdk/lib-dynamodb");
+
+const sns = new SNSClient({ region: process.env.AWS_REGION || "eu-central-1" });
+const dynamo = DynamoDBDocumentClient.from(
+  new DynamoDBClient({ region: process.env.AWS_REGION || "eu-central-1" })
+);
 
 exports.handler = async (event) => {
   try {
@@ -27,10 +32,12 @@ exports.handler = async (event) => {
     }
     
     // Fetch full incident details from DynamoDB
-    const incident = await dynamo.get({
-      TableName: process.env.INCIDENT_TABLE,
-      Key: { incidentId: incidentId }
-    }).promise();
+    const incident = await dynamo.send(
+      new GetCommand({
+        TableName: process.env.INCIDENT_TABLE,
+        Key: { incidentId: incidentId }
+      })
+    );
     
     if (!incident.Item) {
       throw new Error(`Incident not found: ${incidentId}`);
@@ -87,7 +94,7 @@ Access the incident management system to view full details and take action.`,
       }
     };
     
-    const result = await sns.publish(snsParams).promise();
+    const result = await sns.send(new PublishCommand(snsParams));
     
     console.log("Official notification sent:", result.MessageId);
     

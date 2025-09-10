@@ -1,5 +1,5 @@
-const AWS = require('aws-sdk');
-const ses = new AWS.SES({ region: process.env.AWS_REGION });
+const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const ses = new SESClient({ region: process.env.AWS_REGION || 'eu-central-1' });
 
 exports.handler = async (event) => {
   try {
@@ -33,7 +33,7 @@ Details: ${message.details || 'No additional details'}
           }
         };
         
-        await ses.sendEmail(emailParams).promise();
+        await ses.send(new SendEmailCommand(emailParams));
         console.log('Email sent successfully');
       }
     }

@@ -117,16 +117,10 @@ exports.handler = async (event) => {
     if (isAdmin) {
       // no base restriction
     } else if (isCityOfficial) {
-      if (!userRegion) {
-        return {
-          statusCode: 400,
-          headers: UPDATED_SET_HEADERS,
-          body: JSON.stringify({ error: "Region not found in user profile" }),
-        };
-      }
-      filterExprs.push("#reporter_region = :reporter_region");
-      exprAttrNames["#reporter_region"] = "reporter_region";
-      exprAttrValues[":reporter_region"] = userRegion;
+      // City officials only see incidents in their city
+      filterExprs.push("#city = :city");
+      exprAttrNames["#city"] = "city";
+      exprAttrValues[":city"] = userCity;
     } else {
       // regular user → only own incidents
       filterExprs.push("#userId = :userId");
