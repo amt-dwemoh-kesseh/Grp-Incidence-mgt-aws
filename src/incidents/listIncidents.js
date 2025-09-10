@@ -117,10 +117,10 @@ exports.handler = async (event) => {
     if (isAdmin) {
       // no base restriction
     } else if (isCityOfficial) {
-      // City officials only see incidents assigned to them
-      filterExprs.push("#assignedTo = :assignedTo");
-      exprAttrNames["#assignedTo"] = "assignedTo";
-      exprAttrValues[":assignedTo"] = cognitoUserId;
+      // City officials only see incidents in their city
+      filterExprs.push("#city = :city");
+      exprAttrNames["#city"] = "city";
+      exprAttrValues[":city"] = userCity;
     } else {
       // regular user → only own incidents
       filterExprs.push("#userId = :userId");
