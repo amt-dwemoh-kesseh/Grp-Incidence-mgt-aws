@@ -403,6 +403,10 @@ Resources:
       Policies:
         - S3WritePolicy:
             BucketName: !Ref IncidentAttachmentBucket
+      Environment:
+        Variables:
+          ATTACHMENT_BUCKET: !Ref IncidentAttachmentBucket
+          ENV: !Ref Env
       Events:
         Api:
           Type: Api
@@ -422,12 +426,13 @@ Resources:
       Environment:
         Variables:
           INCIDENT_TABLE: !Ref IncidentTable
+          INCIDENT_REPORTED_TOPIC: !Ref IncidentReportedTopic
           ENV: !Ref Env
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
         - SNSPublishMessagePolicy:
-            TopicName: !Ref IncidentReportedTopic
+            TopicName: !GetAtt IncidentReportedTopic.TopicName
         - Statement:
             - Effect: Allow
               Action:
@@ -692,12 +697,13 @@ Resources:
       Environment:
         Variables:
           INCIDENT_TABLE: !Ref IncidentTable
+          STATUS_UPDATED_TOPIC: !Ref StatusUpdatedTopic
           ENV: !Ref Env
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref IncidentTable
         - SNSPublishMessagePolicy:
-            TopicName: !Ref StatusUpdatedTopic
+            TopicName: !GetAtt StatusUpdatedTopic.TopicName
       Events:
         Api:
           Type: Api
@@ -754,9 +760,15 @@ Resources:
       CodeUri: src/notifications/
       Handler: notifyReporter.handler
       Runtime: !Ref NodeRuntime
+      Environment:
+        Variables:
+          INCIDENT_TABLE: !Ref IncidentTable
+          STATUS_UPDATED_TOPIC: !Ref StatusUpdatedTopic
       Policies:
         - SNSPublishMessagePolicy:
-            TopicName: !Ref StatusUpdatedTopic
+            TopicName: !GetAtt StatusUpdatedTopic.TopicName
+        - DynamoDBReadPolicy:
+            TableName: !Ref IncidentTable
       Events:
         StatusUpdatedEvent:
           Type: SNS

@@ -4,7 +4,7 @@ const {
   GetCommand,
   UpdateCommand,
 } = require("@aws-sdk/lib-dynamodb");
-const { SNSClient } = require("@aws-sdk/client-sns");
+const { SNSClient, PublishCommand } = require("@aws-sdk/client-sns");
 const { NodeHttpHandler } = require("@aws-sdk/node-http-handler");
 
 const CORS_HEADERS = {
@@ -135,42 +135,64 @@ exports.handler = async (event) => {
     const previousStatus = currentIncident.Item.status;
 
     // --- Update incident ---
+    let updateExpression = "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy";
+    const expressionAttributeNames = { "#status": "status" };
+    const expressionAttributeValues = {
+      ":status": body.status,
+      ":updatedAt": new Date().toISOString(),
+      ":updatedBy": updatedBy,
+    };
+
+    if (body.comments) {
+      updateExpression += ", comments = :comments";
+      expressionAttributeValues[":comments"] = body.comments;
+    }
+
+    if (body.assignedTo) {
+      updateExpression += ", assignedTo = :assignedTo";
+      expressionAttributeNames["#assignedTo"] = "assignedTo";
+      expressionAttributeValues[":assignedTo"] = body.assignedTo;
+    }
+
     const updateParams = {
       TableName: process.env.INCIDENT_TABLE,
       Key: { incidentId },
-      UpdateExpression:
-        "SET #status = :status, updatedAt = :updatedAt, updatedBy = :updatedBy" +
-        (body.comments ? ", comments = :comments" : ""),
-      ExpressionAttributeNames: { "#status": "status" },
-      ExpressionAttributeValues: {
-        ":status": body.status,
-        ":updatedAt": new Date().toISOString(),
-        ":updatedBy": updatedBy,
-        ...(body.comments && { ":comments": body.comments }),
-      },
+      UpdateExpression: updateExpression,
+      ExpressionAttributeNames: expressionAttributeNames,
+      ExpressionAttributeValues: expressionAttributeValues,
       ReturnValues: "ALL_NEW",
     };
 
     const updateResult = await dynamo.send(new UpdateCommand(updateParams));
 
     // --- Notify via SNS ---
-    // const notificationData = {
-    //   incidentId,
-    //   newStatus: body.status,
-    //   previousStatus,
-    //   updatedBy,
-    //   comments: body.comments || null,
-    //   timestamp: new Date().toISOString(),
-    // };
-    // console.log("sitting on SNS now")
-    // console.log("Sending notification :", process.env.STATUS_UPDATED_TOPIC);
-    // await sns.send(
-    //   new PublishCommand({
-    //     TopicArn: process.env.STATUS_UPDATED_TOPIC,
-    //     Message: JSON.stringify(notificationData),
-    //     Subject: `Incident Status Updated: ${incidentId}`,
-    //   })
-    // );
+    if (process.env.STATUS_UPDATED_TOPIC) {
+      const notificationData = {
+        incidentId,
+        newStatus: body.status,
+        previousStatus,
+        updatedBy,
+        comments: body.comments || null,
+        timestamp: new Date().toISOString(),
+      };
+      
+      try {
+        await sns.send(
+          new PublishCommand({
+            TopicArn: process.env.STATUS_UPDATED_TOPIC,
+            Message: JSON.stringify(notificationData),
+            Subject: `Incident Status Updated: ${incidentId}`,
+            MessageAttributes: {
+              incident_id: { DataType: "String", StringValue: incidentId },
+              new_status: { DataType: "String", StringValue: body.status },
+            },
+          })
+        );
+        console.log("Status update notification sent successfully");
+      } catch (snsError) {
+        console.error("SNS notification error:", snsError);
+      }
+    }
 
     return {
       statusCode: 200,

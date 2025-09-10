@@ -1,105 +1,122 @@
-const { v4: uuidv4 } = require("uuid");
-const AWS = require("aws-sdk");
+const { randomUUID } = require("crypto");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const path = require("path");
 
+// Configure S3 client to avoid automatic checksums
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || "us-east-1",
+  // Disable automatic request checksums
+  requestChecksumCalculation: "WHEN_REQUIRED"
+});
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "OPTIONS,POST",
+  "Access-Control-Allow-Headers": "Content-Type,Authorization",
+};
+
 exports.handler = async (event) => {
-  console.log("Get upload URLs function started");
-  
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers: CORS_HEADERS, body: "" };
+  }
+
   try {
-    const s3 = new AWS.S3();
-    
-    // Parse input
-    const body = JSON.parse(event.body);
+    const body = JSON.parse(event.body || "{}");
     
     if (!body.files || !Array.isArray(body.files) || body.files.length === 0) {
       return {
         statusCode: 400,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ error: "Files array is required" }),
       };
     }
-    
-    // Validate file count (optional limit)
+
     if (body.files.length > 10) {
       return {
         statusCode: 400,
+        headers: CORS_HEADERS,
         body: JSON.stringify({ error: "Maximum 10 files allowed" }),
       };
     }
-    
+
     const uploadUrls = [];
-    const fileKeys = [];
-    
-    // Generate pre-signed URLs for each file
-    for (const filename of body.files) {
-      if (!filename || typeof filename !== 'string') {
+
+    for (const file of body.files) {
+      if (!file || typeof file.name !== "string" || typeof file.type !== "string") {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: "Invalid filename provided" }),
-        };
-      }
-      
-      // Validate file extension (images only)
-      const fileExtension = path.extname(filename).toLowerCase();
-      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-      
-      if (!allowedExtensions.includes(fileExtension)) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ 
-            error: `Invalid file type. Allowed: ${allowedExtensions.join(', ')}` 
+          headers: CORS_HEADERS,
+          body: JSON.stringify({
+            error: "Each file must include { name, type }",
           }),
         };
       }
-      
+
+      // Validate file extension
+      const fileExtension = path.extname(file.name).toLowerCase();
+      const allowedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+      if (!allowedExtensions.includes(fileExtension)) {
+        return {
+          statusCode: 400,
+          headers: CORS_HEADERS,
+          body: JSON.stringify({
+            error: `Invalid file type. Allowed: ${allowedExtensions.join(", ")}`,
+          }),
+        };
+      }
+
       // Generate unique filename
-      const uniqueFilename = `${uuidv4()}${fileExtension}`;
+      const uniqueFilename = `${randomUUID()}${fileExtension}`;
       const s3Key = `temp-uploads/${uniqueFilename}`;
-      
-      // Generate pre-signed URL for upload
-      const uploadUrl = s3.getSignedUrl("putObject", {
+
+      // Create PutObjectCommand without checksum parameters
+      const command = new PutObjectCommand({
         Bucket: process.env.ATTACHMENT_BUCKET,
         Key: s3Key,
-        Expires: 300, // 5 minutes
-        ContentType: `image/${fileExtension.slice(1)}`,
+        ContentType: file.type,
+        // Explicitly avoid checksum parameters
       });
-      
-      // Generate the final URL where file will be accessible
-      const fileUrl = `https://${process.env.ATTACHMENT_BUCKET}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${s3Key}`;
-      
+
+      // Generate presigned URL with minimal parameters
+      const uploadUrl = await getSignedUrl(s3Client, command, {
+        expiresIn: 300, // 5 minutes
+        // Only sign the host header to avoid extra parameters
+        signableHeaders: new Set(['host', 'content-type']),
+        // Disable any additional signing parameters
+        unhoistableHeaders: new Set()
+      });
+
+      // Construct the file URL for later access
+      const fileUrl = `https://${process.env.ATTACHMENT_BUCKET}.s3.${
+        process.env.AWS_REGION || "us-east-1"
+      }.amazonaws.com/${s3Key}`;
+
       uploadUrls.push({
-        originalFilename: filename,
-        uploadUrl: uploadUrl,
-        fileUrl: fileUrl,
-        s3Key: s3Key
+        originalFilename: file.name,
+        uploadUrl,
+        fileUrl,
+        s3Key,
       });
-      
-      fileKeys.push(s3Key);
     }
-    
+
     return {
       statusCode: 200,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
         message: "Upload URLs generated successfully",
-        uploadUrls: uploadUrls,
-        expiresIn: 300
+        uploadUrls,
+        expiresIn: 300,
       }),
     };
     
   } catch (error) {
     console.error("Error generating upload URLs:", error);
-    
-    let statusCode = 500;
-    let errorMessage = "Failed to generate upload URLs";
-    
-    if (error instanceof SyntaxError && error.message.includes("JSON")) {
-      statusCode = 400;
-      errorMessage = "Invalid JSON in request body";
-    }
-    
     return {
-      statusCode: statusCode,
+      statusCode: 500,
+      headers: CORS_HEADERS,
       body: JSON.stringify({
-        error: errorMessage,
+        error: "Failed to generate upload URLs",
         details: error.message,
       }),
     };
